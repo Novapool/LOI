@@ -22,13 +22,15 @@ export default function Lobby({ gameState, updateGameState, playerId, isHost }) 
     if (!playerName.trim()) return;
 
     // Determine if this player should be host
-    // Host is the first player (index 0) in the merged player list
-    const isFirstPlayer = gameState.players.length === 0;
+    // Use the isHost prop passed from App (set for room creators)
+    // If no existing host and no players, this becomes the host (edge case for first joiner)
+    const existingHost = gameState.players.find(p => p.isHost);
+    const shouldBeHost = isHost || (!existingHost && gameState.players.length === 0);
 
     const newPlayer = {
       id: playerId,
       name: playerName.trim(),
-      isHost: isFirstPlayer
+      isHost: shouldBeHost
     };
 
     updateGameState({
@@ -53,7 +55,9 @@ export default function Lobby({ gameState, updateGameState, playerId, isHost }) 
     });
   };
 
-  const canStart = isHost && gameState.players.length >= GAME_CONFIG.MIN_PLAYERS;
+  // Check if current player is the host (either from prop or from player data)
+  const isCurrentPlayerHost = currentPlayer?.isHost || isHost;
+  const canStart = isCurrentPlayerHost && gameState.players.length >= GAME_CONFIG.MIN_PLAYERS;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center p-4">
@@ -112,7 +116,7 @@ export default function Lobby({ gameState, updateGameState, playerId, isHost }) 
             </div>
 
             {/* Start Game Button (Host Only) */}
-            {isHost && (
+            {isCurrentPlayerHost && (
               <button
                 onClick={handleStartGame}
                 disabled={!canStart}
@@ -129,7 +133,7 @@ export default function Lobby({ gameState, updateGameState, playerId, isHost }) 
             )}
 
             {/* Waiting Message (Non-Host) */}
-            {!isHost && (
+            {!isCurrentPlayerHost && (
               <p className="text-center text-gray-600 mt-6 text-sm">
                 Waiting for host to start the game...
               </p>

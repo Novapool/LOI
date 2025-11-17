@@ -58,14 +58,6 @@ export function useGameState(roomCode, initialState) {
             // Convert back to array
             const mergedPlayers = Array.from(playerMap.values());
 
-            // Prefer the state with more players (prevents race conditions)
-            // but allow game state updates (status changes, etc.) to go through
-            const usePayloadState =
-              payload.status !== currentState.status ||
-              payload.currentLevel !== currentState.currentLevel ||
-              payload.currentPlayerIndex !== currentState.currentPlayerIndex ||
-              payload.questionCount !== currentState.questionCount;
-
             return {
               ...currentState,
               ...payload,
@@ -76,13 +68,41 @@ export function useGameState(roomCode, initialState) {
           }
 
           // If no player merging needed, use payload as-is
-          return payload;
+          return {
+            ...currentState,
+            ...payload,
+            roomCode: currentState.roomCode || payload.roomCode
+          };
         });
       })
-      .subscribe((status) => {
+      // Listen for state requests from newly joined players
+      .on('broadcast', { event: 'request-state' }, () => {
+        // Only respond if we have players (meaning we're an existing player in the room)
+        setGameState((currentState) => {
+          if (currentState.players && currentState.players.length > 0) {
+            // Broadcast current state to help the new joiner sync up
+            setTimeout(() => {
+              roomChannel.send({
+                type: 'broadcast',
+                event: 'game-state',
+                payload: currentState
+              });
+            }, 100);
+          }
+          return currentState;
+        });
+      })
+      .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
           setError(null);
+
+          // Request current state from existing players when first joining
+          await roomChannel.send({
+            type: 'broadcast',
+            event: 'request-state',
+            payload: {}
+          });
         } else if (status === 'CHANNEL_ERROR') {
           setIsConnected(false);
           setError('Connection error');

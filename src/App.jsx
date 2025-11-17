@@ -21,7 +21,7 @@ function App() {
     setPlayerId(id);
   }, []);
 
-  // Initial game state
+  // Use useMemo to create initial state that updates with roomCode
   const initialState = {
     roomCode: roomCode,
     status: GAME_CONFIG.STATUS.LOBBY,
@@ -39,13 +39,6 @@ function App() {
     setRoomCode(newRoomCode);
     setIsHost(true);
   };
-
-  // Update gameState with roomCode when it changes
-  useEffect(() => {
-    if (roomCode && updateGameState && gameState.roomCode !== roomCode) {
-      updateGameState({ roomCode });
-    }
-  }, [roomCode, updateGameState]);
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
