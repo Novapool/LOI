@@ -1,8 +1,8 @@
 /**
- * NEW VERSION: useGameState hook using Postgres Realtime + Edge Functions
+ * useGameState hook using Postgres Realtime + Database Triggers
  *
- * This replaces the old Broadcast channel approach with database-backed real-time subscriptions.
- * Game state changes are now server-authoritative via Edge Functions.
+ * This uses Postgres Realtime (Change Data Capture) for real-time subscriptions.
+ * Game state changes are server-authoritative via PostgreSQL triggers and RPC functions.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -20,9 +20,9 @@ if (supabaseUrl && supabaseAnonKey) {
 /**
  * Custom hook for managing game state with Supabase Postgres Realtime
  *
- * @param {string} roomCode - The room code for the game
+ * @param {string} roomCode - The room code for the game (must be uppercase)
  * @param {string} playerId - The current player's ID
- * @returns {Object} { gameState, isConnected, error, callEdgeFunction }
+ * @returns {Object} { gameState, isConnected, error }
  */
 export function useGameState(roomCode, playerId) {
   const [gameState, setGameState] = useState({
@@ -43,45 +43,8 @@ export function useGameState(roomCode, playerId) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState(null);
 
-  // Refs for channels
-  const roomsChannelRef = useRef(null);
-  const playersChannelRef = useRef(null);
-  const stateChannelRef = useRef(null);
-  const heartbeatIntervalRef = useRef(null);
-
-  /**
-   * Helper function to call Edge Functions
-   */
-  const callEdgeFunction = useCallback(async (functionName, payload) => {
-    if (!supabase) {
-      throw new Error('Supabase not configured');
-    }
-
-    try {
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/${functionName}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseAnonKey}`
-          },
-          body: JSON.stringify(payload)
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `Failed to call ${functionName}`);
-      }
-
-      return data;
-    } catch (err) {
-      console.error(`Error calling ${functionName}:`, err);
-      throw err;
-    }
-  }, []);
+  // Ref for single consolidated channel
+  const channelRef = useRef(null);
 
   /**
    * Fetch current game state from database
@@ -90,11 +53,11 @@ export function useGameState(roomCode, playerId) {
     if (!supabase || !roomCode) return;
 
     try {
-      // Fetch room info
+      // Fetch room info (roomCode is already uppercase)
       const { data: room, error: roomError } = await supabase
         .from('game_rooms')
         .select('*')
-        .eq('room_code', roomCode.toUpperCase())
+        .eq('room_code', roomCode)
         .single();
 
       if (roomError) {
@@ -111,7 +74,7 @@ export function useGameState(roomCode, playerId) {
       const { data: players, error: playersError } = await supabase
         .from('game_players')
         .select('*')
-        .eq('room_code', roomCode.toUpperCase())
+        .eq('room_code', roomCode)
         .order('joined_at', { ascending: true });
 
       if (playersError) {
@@ -124,7 +87,7 @@ export function useGameState(roomCode, playerId) {
         const { data, error: stateError } = await supabase
           .from('game_state')
           .select('*')
-          .eq('room_code', roomCode.toUpperCase())
+          .eq('room_code', roomCode)
           .single();
 
         if (!stateError && data) {
@@ -159,7 +122,7 @@ export function useGameState(roomCode, playerId) {
   }, [roomCode]);
 
   /**
-   * Subscribe to Postgres Realtime changes
+   * Subscribe to Postgres Realtime changes using a single consolidated channel
    */
   useEffect(() => {
     if (!supabase || !roomCode) {
@@ -170,16 +133,16 @@ export function useGameState(roomCode, playerId) {
     // Fetch initial state
     fetchGameState();
 
-    // Subscribe to game_rooms changes
-    const roomsChannel = supabase
-      .channel(`game_rooms:${roomCode}`)
+    // Single channel for all table subscriptions
+    const channel = supabase
+      .channel(`room:${roomCode}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'game_rooms',
-          filter: `room_code=eq.${roomCode.toUpperCase()}`
+          filter: `room_code=eq.${roomCode}`
         },
         (payload) => {
           console.log('Room updated:', payload);
@@ -199,37 +162,40 @@ export function useGameState(roomCode, playerId) {
           }));
         }
       )
-      .subscribe();
-
-    // Subscribe to game_players changes
-    const playersChannel = supabase
-      .channel(`game_players:${roomCode}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'game_players',
-          filter: `room_code=eq.${roomCode.toUpperCase()}`
+          filter: `room_code=eq.${roomCode}`
         },
-        (payload) => {
+        async (payload) => {
           console.log('Players updated:', payload);
-          // Refetch all players to keep list in sync
-          fetchGameState();
+          // Selectively refetch only players, not entire game state
+          const { data: players } = await supabase
+            .from('game_players')
+            .select('*')
+            .eq('room_code', roomCode)
+            .order('joined_at', { ascending: true });
+
+          setGameState(prev => ({
+            ...prev,
+            players: (players || []).map(p => ({
+              id: p.player_id,
+              name: p.player_name,
+              isHost: p.is_host
+            }))
+          }));
         }
       )
-      .subscribe();
-
-    // Subscribe to game_state changes
-    const stateChannel = supabase
-      .channel(`game_state:${roomCode}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'game_state',
-          filter: `room_code=eq.${roomCode.toUpperCase()}`
+          filter: `room_code=eq.${roomCode}`
         },
         (payload) => {
           console.log('Game state updated:', payload);
@@ -244,20 +210,24 @@ export function useGameState(roomCode, playerId) {
           }));
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setIsConnected(true);
+          console.log('Connected to Realtime');
+        } else if (status === 'CHANNEL_ERROR') {
+          setError('Failed to connect to real-time updates');
+          setIsConnected(false);
+        }
+      });
 
-    roomsChannelRef.current = roomsChannel;
-    playersChannelRef.current = playersChannel;
-    stateChannelRef.current = stateChannel;
+    channelRef.current = channel;
 
     // Cleanup on unmount
     return () => {
-      roomsChannel.unsubscribe();
-      playersChannel.unsubscribe();
-      stateChannel.unsubscribe();
+      channel.unsubscribe();
       setIsConnected(false);
     };
-  }, [roomCode, fetchGameState]);
+  }, [roomCode]);
 
   /**
    * Send heartbeat to maintain presence
@@ -265,31 +235,35 @@ export function useGameState(roomCode, playerId) {
   useEffect(() => {
     if (!playerId || !roomCode || !isConnected) return;
 
+    const updateHeartbeat = async () => {
+      await supabase
+        .from('game_players')
+        .update({ last_heartbeat: new Date().toISOString() })
+        .eq('room_code', roomCode)
+        .eq('player_id', playerId);
+    };
+
     // Send initial heartbeat
-    callEdgeFunction('player-heartbeat', { roomCode, playerId }).catch(err => {
+    updateHeartbeat().catch(err => {
       console.error('Initial heartbeat failed:', err);
     });
 
     // Send heartbeat every 10 seconds
     const interval = setInterval(() => {
-      callEdgeFunction('player-heartbeat', { roomCode, playerId }).catch(err => {
+      updateHeartbeat().catch(err => {
         console.error('Heartbeat failed:', err);
       });
     }, 10000);
 
-    heartbeatIntervalRef.current = interval;
-
     return () => {
       clearInterval(interval);
     };
-  }, [playerId, roomCode, isConnected, callEdgeFunction]);
+  }, [playerId, roomCode, isConnected]);
 
   return {
     gameState,
     isConnected,
-    error,
-    callEdgeFunction,
-    refetch: fetchGameState
+    error
   };
 }
 

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import Lobby from './components/Lobby';
 import GameScreen from './components/GameScreen';
-import { useGameState } from './hooks/useGameState';
-import { generateRoomCode } from './utils/roomCode';
+import { useGameState, supabase } from './hooks/useGameState';
 import { GAME_CONFIG } from './config';
 
 /**
@@ -16,62 +15,55 @@ function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [creatorName, setCreatorName] = useState('');
 
-  // Initialize player ID on mount
+  // Initialize player ID on mount using crypto.randomUUID()
   useEffect(() => {
-    const id = `player-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const id = crypto.randomUUID();
     setPlayerId(id);
   }, []);
 
-  // Use new Postgres Realtime hook
-  const { gameState, isConnected, error, callEdgeFunction, refetch } = useGameState(roomCode, playerId);
+  // Use Postgres Realtime hook
+  const { gameState, isConnected, error } = useGameState(roomCode, playerId);
 
   const handleCreateRoom = async (e) => {
     e.preventDefault();
     if (!creatorName.trim()) return;
 
     try {
-      // Call create-room Edge Function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-room`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            playerName: creatorName.trim(),
-            playerId: playerId,
-            settings: {
-              startLevel: 5,
-              questionsPerLevel: 3
-            }
-          })
+      // Call create_game_room RPC function (replaces Edge Function)
+      const { data, error } = await supabase.rpc('create_game_room', {
+        player_name: creatorName.trim(),
+        player_id: playerId,
+        game_settings: {
+          startLevel: 5,
+          questionsPerLevel: 3
         }
-      );
+      });
 
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create room');
+      if (error) {
+        throw error;
       }
 
-      if (result.success) {
-        setRoomCode(result.room.roomCode);
+      if (data?.success) {
+        // Room code is already uppercase from database
+        setRoomCode(data.room.roomCode);
+      } else {
+        throw new Error(data?.error || 'Failed to create room');
       }
     } catch (error) {
       console.error('Failed to create room:', error);
-      alert('Failed to create room. Please try again.');
+      alert(`Failed to create room: ${error.message}`);
     }
   };
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
-    if (joinCode.trim().length !== 4) {
+    const normalizedCode = joinCode.trim().toUpperCase();
+    if (normalizedCode.length !== 4) {
       alert('Please enter a valid 4-character room code');
       return;
     }
-    setRoomCode(joinCode.trim().toUpperCase());
+    // Normalize to uppercase once here
+    setRoomCode(normalizedCode);
   };
 
   // Landing page - Create or Join room
@@ -218,13 +210,11 @@ function App() {
     <Lobby
       gameState={gameState}
       playerId={playerId}
-      callEdgeFunction={callEdgeFunction}
     />
   ) : (
     <GameScreen
       gameState={gameState}
       playerId={playerId}
-      callEdgeFunction={callEdgeFunction}
     />
   );
 }

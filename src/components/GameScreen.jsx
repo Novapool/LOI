@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import QuestionCard from './QuestionCard';
 import { GAME_CONFIG } from '../config';
 import { getRandomQuestion } from '../data/questions';
@@ -10,66 +10,78 @@ import { supabase } from '../hooks/useGameState';
  * @param {Object} props
  * @param {Object} props.gameState - Current game state
  * @param {string} props.playerId - Current player's ID
- * @param {Function} props.callEdgeFunction - Function to call Edge Functions
  */
-export default function GameScreen({ gameState, playerId, callEdgeFunction }) {
-  const [askedQuestions, setAskedQuestions] = useState([]);
+export default function GameScreen({ gameState, playerId }) {
 
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isCurrentPlayer = currentPlayer?.id === playerId;
 
-  // Initialize first question when game starts
+  // Initialize first question when game starts (ONLY current player sets question)
   useEffect(() => {
     const setFirstQuestion = async () => {
-      if (!gameState.currentQuestion && gameState.roomCode) {
-        const firstQuestion = getRandomQuestion(gameState.currentLevel, askedQuestions);
+      if (!gameState.currentQuestion && gameState.roomCode && isCurrentPlayer) {
+        // Fetch current asked questions from database
+        const { data: state } = await supabase
+          .from('game_state')
+          .select('asked_questions')
+          .eq('room_code', gameState.roomCode)
+          .single();
+
+        const askedQs = state?.asked_questions || [];
+        const firstQuestion = getRandomQuestion(gameState.currentLevel, askedQs);
 
         // Update question in database
         await supabase
           .from('game_state')
           .update({ current_question: firstQuestion })
           .eq('room_code', gameState.roomCode);
-
-        setAskedQuestions([firstQuestion]);
       }
     };
 
     setFirstQuestion();
-  }, [gameState.currentQuestion, gameState.roomCode]);
+  }, [gameState.currentQuestion, gameState.roomCode, isCurrentPlayer]);
 
   const handleNextTurn = async () => {
     try {
-      // Call next-turn Edge Function
-      const result = await callEdgeFunction('next-turn', {
-        roomCode: gameState.roomCode,
-        playerId: playerId,
-        currentQuestion: gameState.currentQuestion
+      // Fetch current asked questions from database (single source of truth)
+      const { data: currentState } = await supabase
+        .from('game_state')
+        .select('asked_questions')
+        .eq('room_code', gameState.roomCode)
+        .single();
+
+      const askedQs = currentState?.asked_questions || [];
+
+      // Call advance_turn RPC function
+      const { data, error } = await supabase.rpc('advance_turn', {
+        room_code_param: gameState.roomCode,
+        player_id_param: playerId,
+        current_question_param: gameState.currentQuestion
       });
 
-      if (result.gameFinished) {
-        // Game finished - state will update via Realtime
-        console.log('Game finished!');
-        return;
+      if (error) {
+        throw error;
       }
 
-      if (result.success) {
-        // Update asked questions locally
-        setAskedQuestions([...askedQuestions, gameState.currentQuestion]);
-
-        // Set the next question (server doesn't have question bank)
-        if (!result.gameState.currentQuestion) {
-          const nextQuestion = getRandomQuestion(
-            result.gameState.currentLevel,
-            askedQuestions
-          );
-
-          // Update question in database
-          await supabase
-            .from('game_state')
-            .update({ current_question: nextQuestion })
-            .eq('room_code', gameState.roomCode);
-        }
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to advance turn');
       }
+
+      // Database trigger handles game finished status, no need to check here
+      // Realtime subscription will update status automatically
+
+      // Set the next question using updated asked questions from database
+      const nextQuestion = getRandomQuestion(
+        data.gameState.currentLevel,
+        [...askedQs, gameState.currentQuestion]
+      );
+
+      // Update question in database
+      await supabase
+        .from('game_state')
+        .update({ current_question: nextQuestion })
+        .eq('room_code', gameState.roomCode);
+
     } catch (error) {
       console.error('Failed to advance turn:', error);
       alert(error.message || 'Failed to advance turn');

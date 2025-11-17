@@ -12,18 +12,18 @@
 
 ### Stack Summary
 - **Frontend:** React + Tailwind CSS
-- **Real-time:** Supabase Postgres Realtime (WebSocket subscriptions)
-- **Backend:** Supabase Edge Functions (Deno serverless)
+- **Real-time:** Supabase Postgres Realtime (Change Data Capture via WebSocket)
+- **Backend:** PostgreSQL triggers + RPC functions
 - **Database:** PostgreSQL (3 tables: game_rooms, game_players, game_state)
-- **Deployment:** Vercel (frontend) + Supabase (backend + database)
+- **Deployment:** Vercel (frontend) + Supabase (database + real-time)
 
 ### Key Architectural Decisions
 
-1. **Server-Authoritative Architecture**
-   - All game logic runs in Edge Functions (serverless)
+1. **Database-Authoritative Architecture**
+   - All game logic runs in PostgreSQL triggers and RPC functions
    - Database is the single source of truth
-   - Edge Functions validate all state changes
-   - Clients are read-only subscribers
+   - Database triggers validate all state changes
+   - Clients are read-only subscribers via Postgres Realtime
 
 2. **Database-Backed State**
    - Rooms persist in PostgreSQL database
@@ -45,59 +45,57 @@
 ```
 User Input (name + "Create Game")
   ↓
-Frontend calls Edge Function: create-room
+Frontend calls RPC function: create_game_room
   {playerName, playerId, settings}
   ↓
-Edge Function:
-  - Generates unique 4-char room code
+RPC function (PostgreSQL):
+  - Generates unique 4-char room code via generate_room_code()
   - Inserts row in game_rooms table
   - Inserts creator in game_players table (is_host: true)
   - Returns {success, room, player}
   ↓
-Postgres Realtime broadcasts INSERT events
+Postgres Realtime broadcasts INSERT events (CDC)
   ↓
-Frontend subscribes to room's Postgres channels
+Frontend subscribes to room's Postgres channel
   ↓
-All subscribed clients receive room and player data
+All subscribed clients receive room and player data via WebSocket
 ```
 
 ### 2. Player Joining
 ```
 User Input (name + room code)
   ↓
-Frontend subscribes to Postgres channels for room
-  (game_rooms, game_players, game_state)
+Frontend subscribes to Postgres channel for room
+  (listens to game_rooms, game_players, game_state changes)
   ↓
-Frontend calls Edge Function: join-room
-  {roomCode, playerName, playerId}
+Frontend directly inserts into game_players table
+  {roomCode, playerName, playerId, isHost: false}
   ↓
-Edge Function validates:
+Database trigger validates:
   - Room exists and not full
   - Player not already in room
-  - Inserts player in game_players table
-  - Returns {success, player}
+  - Enforces constraints
   ↓
-Postgres Realtime broadcasts INSERT to all subscribers
+Postgres Realtime broadcasts INSERT to all subscribers (CDC)
   ↓
-All devices update player list in real-time
+All devices update player list in real-time via WebSocket
 ```
 
 ### 3. Game Start
 ```
 Host clicks "Start Game"
   ↓
-Frontend calls Edge Function: start-game
-  {roomCode, playerId}
+Frontend updates game_rooms table directly
+  UPDATE game_rooms SET status = 'playing'
+  WHERE room_code = X AND host_id = playerId
   ↓
-Edge Function validates:
-  - playerId matches room's host_id
-  - Minimum players met (3+)
-  - Updates game_rooms.status = 'playing'
+Database trigger: initialize_game_state_trigger
+  - Validates minimum players met (3+)
   - Creates game_state row:
     - currentLevel: 5
     - currentPlayerIndex: random(0-N)
     - questionCount: 0
-  - Returns {success, gameState}
+  - Auto-committed with room status update
   ↓
 Postgres Realtime broadcasts INSERT (game_state) + UPDATE (game_rooms)
   ↓
@@ -110,49 +108,51 @@ Client sets first question (server doesn't have question bank)
 ```
 Current player clicks "Done Answering"
   ↓
-Frontend calls Edge Function: next-turn
+Frontend calls RPC function: advance_turn
   {roomCode, playerId, currentQuestion}
   ↓
-Edge Function validates:
+RPC function validates & updates:
   - playerId matches current player in game_state
   - Increments questionCount
-  - Checks if level should decrease
+  - Checks if level should decrease (via process_next_turn trigger)
   - Selects next random player (excluding current)
   - Adds currentQuestion to asked_questions array
   - Updates game_state table
-  - Returns {success, gameState, gameFinished}
+  - Returns {success, gameState}
   ↓
-Postgres Realtime broadcasts UPDATE event
+Postgres Realtime broadcasts UPDATE event (CDC)
   ↓
-All devices:
+All devices receive update via WebSocket:
   - Update highlighted player
-  - Display new question (client selects from pool)
   - Animate level change if applicable
   ↓
-Client updates question in database (server doesn't pick questions)
+Current player's client sets next question from client-side pool
+  (database doesn't have question bank)
 ```
 
 ### 5. Level Transitions
 ```
 After N questions at current level:
   ↓
-Edge Function (next-turn) detects threshold
+Database trigger: process_next_turn detects threshold
   (questionCount >= questionsPerLevel)
   ↓
-Edge Function decrements level (5 → 4 → 3 → 2 → 1)
+Trigger decrements level (5 → 4 → 3 → 2 → 1)
   ↓
 Updates game_state with:
   - currentLevel: 4
   - questionCount: 0 (reset)
   - currentPlayerIndex: (next random player)
   ↓
-Returns gameFinished: false (or true if level 1 complete)
+If level 1 complete, trigger updates game_rooms.status = 'finished'
   ↓
-Postgres Realtime broadcasts UPDATE
+Postgres Realtime broadcasts UPDATE (CDC)
   ↓
-All devices show level transition animation
+All devices receive update via WebSocket:
+  - Show level transition animation
+  - Update game status if finished
   ↓
-Client selects new question from Level 4 pool
+Current player's client selects new question from Level 4 pool
 ```
 
 ---
@@ -202,47 +202,50 @@ Client selects new question from Level 4 pool
 }
 ```
 
-### Edge Functions API
+### Database RPC Functions
 
-**create-room:**
-```javascript
-POST /functions/v1/create-room
-Body: { playerName: string, playerId: string, settings?: object }
-Returns: { success: true, room: {...}, player: {...} }
-Error: { error: string, details?: string }
+**create_game_room:**
+```sql
+SELECT * FROM create_game_room(
+  player_name TEXT,
+  player_id TEXT,
+  game_settings JSONB
+)
+Returns: { success: boolean, room: {...}, player: {...}, error?: string }
 ```
+- Generates unique room code via `generate_room_code()`
+- Creates room in game_rooms table
+- Adds creator as host in game_players table
+- Returns room and player data
 
-**join-room:**
-```javascript
-POST /functions/v1/join-room
-Body: { roomCode: string, playerName: string, playerId: string }
-Returns: { success: true, player: {...} }
-Error: { error: "Room not found" | "Room is full" | "Player already in room" }
+**advance_turn:**
+```sql
+SELECT * FROM advance_turn(
+  room_code_param TEXT,
+  player_id_param TEXT,
+  current_question_param TEXT
+)
+Returns: { success: boolean, gameState: {...}, error?: string }
 ```
+- Validates current player
+- Increments question count
+- Adds question to asked_questions array
+- Selects next random player
+- Triggers `process_next_turn` for level transitions
+- Returns updated game state
 
-**start-game:**
-```javascript
-POST /functions/v1/start-game
-Body: { roomCode: string, playerId: string }
-Returns: { success: true, gameState: {...} }
-Error: { error: "Only host can start game" | "Need at least 3 players" }
-```
+### Database Triggers
 
-**next-turn:**
-```javascript
-POST /functions/v1/next-turn
-Body: { roomCode: string, playerId: string, currentQuestion: string }
-Returns: { success: true, gameState: {...}, gameFinished: boolean }
-Error: { error: "Not your turn" }
-```
+**initialize_game_state_trigger:**
+- Fires when game_rooms.status changes to 'playing'
+- Creates game_state record with initial values
+- Sets random starting player
 
-**player-heartbeat:**
-```javascript
-POST /functions/v1/player-heartbeat
-Body: { roomCode: string, playerId: string }
-Returns: { success: true }
-// Called every 10 seconds by clients to maintain presence
-```
+**process_next_turn:**
+- Fires after advance_turn updates game_state
+- Checks if level should decrease
+- Handles level transitions (5 → 4 → 3 → 2 → 1)
+- Sets game_rooms.status = 'finished' when complete
 
 ### Client-Side State (Derived from Database)
 ```javascript
@@ -344,34 +347,79 @@ export const questions = {
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 ```
 
-### Channel Subscription
+### Postgres Realtime Channel Subscription (CDC)
 ```javascript
-const channel = supabase.channel(`game:${roomCode}`, {
-  config: {
-    broadcast: { self: true }  // Receive own messages
-  }
-})
-
-// Subscribe to broadcasts
-channel
-  .on('broadcast', { event: 'state_update' }, (payload) => {
-    setGameState(payload.state)
+// Single channel for all table subscriptions
+const channel = supabase
+  .channel(`room:${roomCode}`)
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'game_rooms',
+    filter: `room_code=eq.${roomCode}`
+  }, (payload) => {
+    // Handle room updates (status changes, etc.)
+    setGameState(prev => ({ ...prev, ...payload.new }))
   })
-  .subscribe()
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'game_players',
+    filter: `room_code=eq.${roomCode}`
+  }, async (payload) => {
+    // Refetch players when changes occur
+    const { data: players } = await supabase
+      .from('game_players')
+      .select('*')
+      .eq('room_code', roomCode)
+    setGameState(prev => ({ ...prev, players }))
+  })
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'game_state',
+    filter: `room_code=eq.${roomCode}`
+  }, (payload) => {
+    // Handle game state updates (turn changes, level transitions)
+    setGameState(prev => ({ ...prev, ...payload.new }))
+  })
+  .subscribe((status) => {
+    if (status === 'SUBSCRIBED') {
+      console.log('Connected to Realtime')
+    }
+  })
 ```
 
-### Broadcasting State
+### Direct Database Operations
 ```javascript
-channel.send({
-  type: 'broadcast',
-  event: 'state_update',
-  payload: { state: updatedGameState }
+// Call RPC function
+const { data, error } = await supabase.rpc('create_game_room', {
+  player_name: 'Alice',
+  player_id: crypto.randomUUID(),
+  game_settings: { startLevel: 5, questionsPerLevel: 3 }
 })
+
+// Direct table insert (with trigger validation)
+await supabase
+  .from('game_players')
+  .insert({
+    room_code: 'ABCD',
+    player_id: playerId,
+    player_name: 'Bob',
+    is_host: false
+  })
+
+// Heartbeat update
+await supabase
+  .from('game_players')
+  .update({ last_heartbeat: new Date().toISOString() })
+  .eq('room_code', roomCode)
+  .eq('player_id', playerId)
 ```
 
 ### Cleanup
@@ -389,14 +437,16 @@ useEffect(() => {
 
 ### State Management
 - Use React hooks (`useState`, `useEffect`) for local state
-- Synchronize state changes via Supabase broadcast
-- Avoid prop drilling - use context if needed
+- Database is the single source of truth
+- Subscribe to Postgres Realtime (CDC) for automatic updates
+- Avoid prop drilling - use custom hooks like `useGameState`
 
 ### Real-Time Sync Rules
-1. **Single Source of Truth:** Last broadcast wins (eventual consistency)
-2. **Optimistic Updates:** Update local UI immediately, then broadcast
-3. **Conflict Resolution:** Trust the most recent timestamp
-4. **Disconnection Handling:** Show warning if Supabase connection drops
+1. **Single Source of Truth:** Database always wins (via CDC)
+2. **No Optimistic Updates:** Database triggers handle all validation
+3. **Automatic Sync:** Postgres Realtime broadcasts changes via WebSocket
+4. **Disconnection Handling:** Show warning if Realtime connection drops
+5. **Question Assignment:** Only current player sets questions (prevents race conditions)
 
 ### Code Organization
 ```

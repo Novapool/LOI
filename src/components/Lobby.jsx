@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GAME_CONFIG } from '../config';
+import { supabase } from '../hooks/useGameState';
 
 /**
  * Lobby component - Pre-game room with player list
@@ -7,9 +8,8 @@ import { GAME_CONFIG } from '../config';
  * @param {Object} props
  * @param {Object} props.gameState - Current game state
  * @param {string} props.playerId - Current player's ID
- * @param {Function} props.callEdgeFunction - Function to call Edge Functions
  */
-export default function Lobby({ gameState, playerId, callEdgeFunction }) {
+export default function Lobby({ gameState, playerId }) {
   const [playerName, setPlayerName] = useState('');
 
   // Check if current player has joined by looking in gameState.players
@@ -24,15 +24,21 @@ export default function Lobby({ gameState, playerId, callEdgeFunction }) {
     if (!playerName.trim()) return;
 
     try {
-      const result = await callEdgeFunction('join-room', {
-        roomCode: gameState.roomCode,
-        playerName: playerName.trim(),
-        playerId: playerId
-      });
+      // Direct database insert (validation happens via database trigger)
+      const { error } = await supabase
+        .from('game_players')
+        .insert({
+          room_code: gameState.roomCode,
+          player_id: playerId,
+          player_name: playerName.trim(),
+          is_host: false
+        });
 
-      if (result.success) {
-        setPlayerName('');
+      if (error) {
+        throw error;
       }
+
+      setPlayerName('');
     } catch (error) {
       console.error('Failed to join room:', error);
       alert(error.message || 'Failed to join room');
@@ -46,15 +52,19 @@ export default function Lobby({ gameState, playerId, callEdgeFunction }) {
     }
 
     try {
-      const result = await callEdgeFunction('start-game', {
-        roomCode: gameState.roomCode,
-        playerId: playerId
-      });
+      // Direct database update (validation + game state init via database triggers)
+      const { error } = await supabase
+        .from('game_rooms')
+        .update({ status: 'playing' })
+        .eq('room_code', gameState.roomCode)
+        .eq('host_id', playerId); // Ensure only host can update
 
-      if (result.success) {
-        // Game state will update automatically via Realtime
-        console.log('Game started successfully');
+      if (error) {
+        throw error;
       }
+
+      // Game state will update automatically via Realtime
+      console.log('Game started successfully');
     } catch (error) {
       console.error('Failed to start game:', error);
       alert(error.message || 'Failed to start game');
