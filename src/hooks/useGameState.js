@@ -39,7 +39,45 @@ export function useGameState(roomCode, initialState) {
     // Subscribe to game state broadcasts
     roomChannel
       .on('broadcast', { event: 'game-state' }, ({ payload }) => {
-        setGameState(payload);
+        setGameState((currentState) => {
+          // Merge player lists intelligently to prevent overwrites
+          if (payload.players && currentState.players) {
+            // Create a map of existing players by ID
+            const playerMap = new Map();
+
+            // Add all current players first
+            currentState.players.forEach(player => {
+              playerMap.set(player.id, player);
+            });
+
+            // Add/update with incoming players
+            payload.players.forEach(player => {
+              playerMap.set(player.id, player);
+            });
+
+            // Convert back to array
+            const mergedPlayers = Array.from(playerMap.values());
+
+            // Prefer the state with more players (prevents race conditions)
+            // but allow game state updates (status changes, etc.) to go through
+            const usePayloadState =
+              payload.status !== currentState.status ||
+              payload.currentLevel !== currentState.currentLevel ||
+              payload.currentPlayerIndex !== currentState.currentPlayerIndex ||
+              payload.questionCount !== currentState.questionCount;
+
+            return {
+              ...currentState,
+              ...payload,
+              players: mergedPlayers,
+              // Preserve room code from current state
+              roomCode: currentState.roomCode || payload.roomCode
+            };
+          }
+
+          // If no player merging needed, use payload as-is
+          return payload;
+        });
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {

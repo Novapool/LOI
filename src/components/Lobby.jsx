@@ -12,23 +12,28 @@ import { GAME_CONFIG } from '../config';
  */
 export default function Lobby({ gameState, updateGameState, playerId, isHost }) {
   const [playerName, setPlayerName] = useState('');
-  const [hasJoined, setHasJoined] = useState(false);
+
+  // Check if current player has joined by looking in gameState.players
+  const currentPlayer = gameState.players.find(p => p.id === playerId);
+  const hasJoined = !!currentPlayer;
 
   const handleJoinGame = (e) => {
     e.preventDefault();
     if (!playerName.trim()) return;
 
+    // Determine if this player should be host
+    // Host is the first player (index 0) in the merged player list
+    const isFirstPlayer = gameState.players.length === 0;
+
     const newPlayer = {
       id: playerId,
       name: playerName.trim(),
-      isHost: gameState.players.length === 0 // First player is host
+      isHost: isFirstPlayer
     };
 
     updateGameState({
       players: [...gameState.players, newPlayer]
     });
-
-    setHasJoined(true);
   };
 
   const handleStartGame = () => {
