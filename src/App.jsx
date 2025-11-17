@@ -11,9 +11,10 @@ import { GAME_CONFIG } from './config';
 function App() {
   const [roomCode, setRoomCode] = useState('');
   const [playerId, setPlayerId] = useState('');
-  const [isHost, setIsHost] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [joinCode, setJoinCode] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [creatorName, setCreatorName] = useState('');
 
   // Initialize player ID on mount
   useEffect(() => {
@@ -21,31 +22,48 @@ function App() {
     setPlayerId(id);
   }, []);
 
-  // Initial game state
-  const initialState = {
-    roomCode: roomCode,
-    status: GAME_CONFIG.STATUS.LOBBY,
-    players: [],
-    currentLevel: 5,
-    currentPlayerIndex: 0,
-    currentQuestion: '',
-    questionCount: 0
-  };
+  // Use new Postgres Realtime hook
+  const { gameState, isConnected, error, callEdgeFunction, refetch } = useGameState(roomCode, playerId);
 
-  const { gameState, updateGameState, isConnected, error } = useGameState(roomCode, initialState);
+  const handleCreateRoom = async (e) => {
+    e.preventDefault();
+    if (!creatorName.trim()) return;
 
-  const handleCreateRoom = () => {
-    const newRoomCode = generateRoomCode();
-    setRoomCode(newRoomCode);
-    setIsHost(true);
-  };
+    try {
+      // Call create-room Edge Function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-room`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            playerName: creatorName.trim(),
+            playerId: playerId,
+            settings: {
+              startLevel: 5,
+              questionsPerLevel: 3
+            }
+          })
+        }
+      );
 
-  // Update gameState with roomCode when it changes
-  useEffect(() => {
-    if (roomCode && updateGameState && gameState.roomCode !== roomCode) {
-      updateGameState({ roomCode });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create room');
+      }
+
+      if (result.success) {
+        setRoomCode(result.room.roomCode);
+      }
+    } catch (error) {
+      console.error('Failed to create room:', error);
+      alert('Failed to create room. Please try again.');
     }
-  }, [roomCode, updateGameState]);
+  };
 
   const handleJoinRoom = (e) => {
     e.preventDefault();
@@ -54,7 +72,6 @@ function App() {
       return;
     }
     setRoomCode(joinCode.trim().toUpperCase());
-    setIsHost(false);
   };
 
   // Landing page - Create or Join room
@@ -67,10 +84,10 @@ function App() {
             A party game that flips conversation on its head
           </p>
 
-          {!isJoining ? (
+          {!isJoining && !isCreating ? (
             <div className="space-y-4">
               <button
-                onClick={handleCreateRoom}
+                onClick={() => setIsCreating(true)}
                 className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition transform hover:scale-105"
               >
                 Create New Game
@@ -82,6 +99,36 @@ function App() {
                 Join Existing Game
               </button>
             </div>
+          ) : isCreating ? (
+            <form onSubmit={handleCreateRoom} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Enter your name
+                </label>
+                <input
+                  type="text"
+                  value={creatorName}
+                  onChange={(e) => setCreatorName(e.target.value)}
+                  placeholder="Your name"
+                  maxLength={20}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  autoFocus
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition"
+              >
+                Create Game
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsCreating(false)}
+                className="w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
+              >
+                Back
+              </button>
+            </form>
           ) : (
             <form onSubmit={handleJoinRoom} className="space-y-4">
               <div>
@@ -170,15 +217,14 @@ function App() {
   return gameState.status === GAME_CONFIG.STATUS.LOBBY ? (
     <Lobby
       gameState={gameState}
-      updateGameState={updateGameState}
       playerId={playerId}
-      isHost={isHost}
+      callEdgeFunction={callEdgeFunction}
     />
   ) : (
     <GameScreen
       gameState={gameState}
-      updateGameState={updateGameState}
       playerId={playerId}
+      callEdgeFunction={callEdgeFunction}
     />
   );
 }

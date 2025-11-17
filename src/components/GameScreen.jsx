@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react';
 import QuestionCard from './QuestionCard';
 import { GAME_CONFIG } from '../config';
 import { getRandomQuestion } from '../data/questions';
-import { randomElementExcluding } from '../utils/shuffle';
+import { supabase } from '../hooks/useGameState';
 
 /**
  * GameScreen component - Active game UI
  *
  * @param {Object} props
  * @param {Object} props.gameState - Current game state
- * @param {Function} props.updateGameState - Function to update game state
  * @param {string} props.playerId - Current player's ID
+ * @param {Function} props.callEdgeFunction - Function to call Edge Functions
  */
-export default function GameScreen({ gameState, updateGameState, playerId }) {
+export default function GameScreen({ gameState, playerId, callEdgeFunction }) {
   const [askedQuestions, setAskedQuestions] = useState([]);
 
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
@@ -20,51 +20,60 @@ export default function GameScreen({ gameState, updateGameState, playerId }) {
 
   // Initialize first question when game starts
   useEffect(() => {
-    if (!gameState.currentQuestion) {
-      const firstQuestion = getRandomQuestion(gameState.currentLevel, askedQuestions);
-      updateGameState({
-        currentQuestion: firstQuestion
+    const setFirstQuestion = async () => {
+      if (!gameState.currentQuestion && gameState.roomCode) {
+        const firstQuestion = getRandomQuestion(gameState.currentLevel, askedQuestions);
+
+        // Update question in database
+        await supabase
+          .from('game_state')
+          .update({ current_question: firstQuestion })
+          .eq('room_code', gameState.roomCode);
+
+        setAskedQuestions([firstQuestion]);
+      }
+    };
+
+    setFirstQuestion();
+  }, [gameState.currentQuestion, gameState.roomCode]);
+
+  const handleNextTurn = async () => {
+    try {
+      // Call next-turn Edge Function
+      const result = await callEdgeFunction('next-turn', {
+        roomCode: gameState.roomCode,
+        playerId: playerId,
+        currentQuestion: gameState.currentQuestion
       });
-      setAskedQuestions([...askedQuestions, firstQuestion]);
-    }
-  }, []);
 
-  const handleNextTurn = () => {
-    const newQuestionCount = gameState.questionCount + 1;
-    let newLevel = gameState.currentLevel;
-    let newCount = newQuestionCount;
-
-    // Check if we should progress to next level (descending from 5 to 1)
-    if (newQuestionCount >= GAME_CONFIG.QUESTIONS_PER_LEVEL) {
-      newLevel = gameState.currentLevel - 1;
-      newCount = 0;
-
-      // Check if game is finished (reached Level 1 and completed all questions)
-      if (newLevel < 1) {
-        updateGameState({
-          status: GAME_CONFIG.STATUS.FINISHED
-        });
+      if (result.gameFinished) {
+        // Game finished - state will update via Realtime
+        console.log('Game finished!');
         return;
       }
+
+      if (result.success) {
+        // Update asked questions locally
+        setAskedQuestions([...askedQuestions, gameState.currentQuestion]);
+
+        // Set the next question (server doesn't have question bank)
+        if (!result.gameState.currentQuestion) {
+          const nextQuestion = getRandomQuestion(
+            result.gameState.currentLevel,
+            askedQuestions
+          );
+
+          // Update question in database
+          await supabase
+            .from('game_state')
+            .update({ current_question: nextQuestion })
+            .eq('room_code', gameState.roomCode);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to advance turn:', error);
+      alert(error.message || 'Failed to advance turn');
     }
-
-    // Select next random player (excluding current player)
-    const playerIndices = gameState.players.map((_, idx) => idx);
-    const nextPlayerIndex = playerIndices.indexOf(
-      randomElementExcluding(playerIndices, [gameState.currentPlayerIndex])
-    );
-
-    // Get next random question
-    const nextQuestion = getRandomQuestion(newLevel, askedQuestions);
-    setAskedQuestions([...askedQuestions, nextQuestion]);
-
-    // Update game state
-    updateGameState({
-      currentPlayerIndex: nextPlayerIndex,
-      currentLevel: newLevel,
-      questionCount: newCount,
-      currentQuestion: nextQuestion
-    });
   };
 
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {

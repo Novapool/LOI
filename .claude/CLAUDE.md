@@ -12,26 +12,30 @@
 
 ### Stack Summary
 - **Frontend:** React + Tailwind CSS
-- **Real-time:** Supabase Realtime Broadcast (WebSocket)
-- **Deployment:** Vercel (frontend) + Supabase (infrastructure)
-- **Database:** None (fully ephemeral)
+- **Real-time:** Supabase Postgres Realtime (WebSocket subscriptions)
+- **Backend:** Supabase Edge Functions (Deno serverless)
+- **Database:** PostgreSQL (3 tables: game_rooms, game_players, game_state)
+- **Deployment:** Vercel (frontend) + Supabase (backend + database)
 
 ### Key Architectural Decisions
 
-1. **No Backend Server**
-   - All game logic runs client-side
-   - Supabase Realtime handles state synchronization only
-   - No custom API endpoints needed
+1. **Server-Authoritative Architecture**
+   - All game logic runs in Edge Functions (serverless)
+   - Database is the single source of truth
+   - Edge Functions validate all state changes
+   - Clients are read-only subscribers
 
-2. **Ephemeral State**
-   - Rooms exist only while players are connected
-   - No persistence to database
-   - Room codes are randomly generated and disposable
+2. **Database-Backed State**
+   - Rooms persist in PostgreSQL database
+   - Automatic cleanup after 2 hours or when empty
+   - Room codes generated and validated server-side
+   - Player presence tracked via heartbeat mechanism
 
-3. **Broadcast-Based Sync**
-   - Uses Supabase Broadcast channels (not Postgres CDC)
-   - Each room = one channel (e.g., `game:XK7D`)
-   - All clients subscribe and broadcast state changes
+3. **Postgres Realtime Sync**
+   - Uses Supabase Postgres Realtime (CDC subscriptions)
+   - Clients subscribe to database change events
+   - Real-time updates via WebSocket (< 50ms latency)
+   - Perfect state synchronization across all devices
 
 ---
 
@@ -41,30 +45,39 @@
 ```
 User Input (name + "Create Game")
   ↓
-Frontend generates 4-char room code
+Frontend calls Edge Function: create-room
+  {playerName, playerId, settings}
   ↓
-Subscribe to Supabase channel `game:{code}`
+Edge Function:
+  - Generates unique 4-char room code
+  - Inserts row in game_rooms table
+  - Inserts creator in game_players table (is_host: true)
+  - Returns {success, room, player}
   ↓
-Initialize local game state:
-  {
-    roomCode: "XK7D",
-    players: [{name: "Laith", id: uuid()}],
-    status: "lobby",
-    settings: {startLevel: 5, questionsPerLevel: 3}
-  }
+Postgres Realtime broadcasts INSERT events
   ↓
-Broadcast initial state to channel
+Frontend subscribes to room's Postgres channels
+  ↓
+All subscribed clients receive room and player data
 ```
 
 ### 2. Player Joining
 ```
 User Input (name + room code)
   ↓
-Subscribe to existing channel `game:{code}`
+Frontend subscribes to Postgres channels for room
+  (game_rooms, game_players, game_state)
   ↓
-Receive current game state from channel
+Frontend calls Edge Function: join-room
+  {roomCode, playerName, playerId}
   ↓
-Broadcast "player_joined" event with new player data
+Edge Function validates:
+  - Room exists and not full
+  - Player not already in room
+  - Inserts player in game_players table
+  - Returns {success, player}
+  ↓
+Postgres Realtime broadcasts INSERT to all subscribers
   ↓
 All devices update player list in real-time
 ```
@@ -73,92 +86,177 @@ All devices update player list in real-time
 ```
 Host clicks "Start Game"
   ↓
-Frontend:
-  - Sets status: "playing"
-  - Sets currentLevel: 5
-  - Selects random first player (currentPlayerIndex: 0-N)
-  - Pulls random question from Level 5 pool
+Frontend calls Edge Function: start-game
+  {roomCode, playerId}
   ↓
-Broadcast complete game state
+Edge Function validates:
+  - playerId matches room's host_id
+  - Minimum players met (3+)
+  - Updates game_rooms.status = 'playing'
+  - Creates game_state row:
+    - currentLevel: 5
+    - currentPlayerIndex: random(0-N)
+    - questionCount: 0
+  - Returns {success, gameState}
+  ↓
+Postgres Realtime broadcasts INSERT (game_state) + UPDATE (game_rooms)
   ↓
 All devices render game screen with highlighted current player
+  ↓
+Client sets first question (server doesn't have question bank)
 ```
 
 ### 4. Turn Progression
 ```
 Current player clicks "Done Answering"
   ↓
-Frontend:
-  - Increment question counter for current level
-  - Select next random player (excluding current)
-  - Pull new random question
-  - Check if level should decrease (after N questions)
+Frontend calls Edge Function: next-turn
+  {roomCode, playerId, currentQuestion}
   ↓
-Broadcast updated state:
-  {
-    currentLevel: 5,
-    currentPlayerIndex: 2,
-    currentQuestion: "What would you die for?",
-    questionCount: 2
-  }
+Edge Function validates:
+  - playerId matches current player in game_state
+  - Increments questionCount
+  - Checks if level should decrease
+  - Selects next random player (excluding current)
+  - Adds currentQuestion to asked_questions array
+  - Updates game_state table
+  - Returns {success, gameState, gameFinished}
+  ↓
+Postgres Realtime broadcasts UPDATE event
   ↓
 All devices:
   - Update highlighted player
-  - Display new question
+  - Display new question (client selects from pool)
   - Animate level change if applicable
+  ↓
+Client updates question in database (server doesn't pick questions)
 ```
 
 ### 5. Level Transitions
 ```
 After N questions at current level:
   ↓
-Frontend decrements level (5 → 4 → 3 → 2 → 1)
+Edge Function (next-turn) detects threshold
+  (questionCount >= questionsPerLevel)
   ↓
-Broadcast state with:
+Edge Function decrements level (5 → 4 → 3 → 2 → 1)
+  ↓
+Updates game_state with:
   - currentLevel: 4
-  - currentQuestion: (new random from Level 4 pool)
   - questionCount: 0 (reset)
+  - currentPlayerIndex: (next random player)
+  ↓
+Returns gameFinished: false (or true if level 1 complete)
+  ↓
+Postgres Realtime broadcasts UPDATE
   ↓
 All devices show level transition animation
+  ↓
+Client selects new question from Level 4 pool
 ```
 
 ---
 
 ## Data Models
 
-### Game State (Client-Side)
+### Database Schema
+
+**game_rooms table:**
 ```javascript
 {
-  roomCode: string,              // e.g., "XK7D"
-  status: "lobby" | "playing" | "finished",
-  players: [
-    {
-      id: string,                // UUID
-      name: string,              // User-provided
-      isHost: boolean
-    }
-  ],
-  settings: {
-    startLevel: 1-5,             // Configurable by host
-    questionsPerLevel: number    // Default: 3
-  },
-  currentLevel: 1-5,
-  currentPlayerIndex: number,    // Index in players array
-  currentQuestion: string,
-  questionCount: number          // Per-level counter
+  id: UUID PRIMARY KEY,
+  room_code: TEXT UNIQUE NOT NULL,     // e.g., "XK7D"
+  host_id: TEXT NOT NULL,              // Creator's player ID
+  status: TEXT NOT NULL,               // 'lobby' | 'playing' | 'finished'
+  settings: JSONB NOT NULL,            // {startLevel: 5, questionsPerLevel: 3}
+  created_at: TIMESTAMPTZ NOT NULL,
+  updated_at: TIMESTAMPTZ NOT NULL
 }
 ```
 
-### Broadcast Events
+**game_players table:**
 ```javascript
-// Player joins
-{ type: "player_joined", player: {id, name} }
+{
+  id: UUID PRIMARY KEY,
+  room_code: TEXT NOT NULL,            // Foreign key to game_rooms
+  player_id: TEXT NOT NULL,            // Client-generated UUID
+  player_name: TEXT NOT NULL,          // User-provided name
+  is_host: BOOLEAN NOT NULL,           // Host flag
+  joined_at: TIMESTAMPTZ NOT NULL,
+  last_heartbeat: TIMESTAMPTZ NOT NULL,
+  UNIQUE(room_code, player_id)         // Prevent duplicates
+}
+```
 
-// Game state update
-{ type: "state_update", state: {currentLevel, currentPlayerIndex, ...} }
+**game_state table:**
+```javascript
+{
+  id: UUID PRIMARY KEY,
+  room_code: TEXT UNIQUE NOT NULL,     // Foreign key to game_rooms
+  current_level: INTEGER NOT NULL,     // 1-5
+  current_player_index: INTEGER NOT NULL,
+  current_question: TEXT,              // Current question text
+  question_count: INTEGER NOT NULL,    // Per-level counter
+  asked_questions: JSONB NOT NULL,     // Array of asked questions
+  updated_at: TIMESTAMPTZ NOT NULL
+}
+```
 
-// Player leaves
-{ type: "player_left", playerId: string }
+### Edge Functions API
+
+**create-room:**
+```javascript
+POST /functions/v1/create-room
+Body: { playerName: string, playerId: string, settings?: object }
+Returns: { success: true, room: {...}, player: {...} }
+Error: { error: string, details?: string }
+```
+
+**join-room:**
+```javascript
+POST /functions/v1/join-room
+Body: { roomCode: string, playerName: string, playerId: string }
+Returns: { success: true, player: {...} }
+Error: { error: "Room not found" | "Room is full" | "Player already in room" }
+```
+
+**start-game:**
+```javascript
+POST /functions/v1/start-game
+Body: { roomCode: string, playerId: string }
+Returns: { success: true, gameState: {...} }
+Error: { error: "Only host can start game" | "Need at least 3 players" }
+```
+
+**next-turn:**
+```javascript
+POST /functions/v1/next-turn
+Body: { roomCode: string, playerId: string, currentQuestion: string }
+Returns: { success: true, gameState: {...}, gameFinished: boolean }
+Error: { error: "Not your turn" }
+```
+
+**player-heartbeat:**
+```javascript
+POST /functions/v1/player-heartbeat
+Body: { roomCode: string, playerId: string }
+Returns: { success: true }
+// Called every 10 seconds by clients to maintain presence
+```
+
+### Client-Side State (Derived from Database)
+```javascript
+{
+  roomCode: string,
+  status: "lobby" | "playing" | "finished",
+  hostId: string,
+  players: Array<{id, name, isHost}>,
+  settings: {startLevel: 1-5, questionsPerLevel: number},
+  currentLevel: 1-5,
+  currentPlayerIndex: number,
+  currentQuestion: string,
+  questionCount: number
+}
 ```
 
 ---

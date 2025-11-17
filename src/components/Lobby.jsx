@@ -6,51 +6,59 @@ import { GAME_CONFIG } from '../config';
  *
  * @param {Object} props
  * @param {Object} props.gameState - Current game state
- * @param {Function} props.updateGameState - Function to update game state
  * @param {string} props.playerId - Current player's ID
- * @param {boolean} props.isHost - Whether current player is the host
+ * @param {Function} props.callEdgeFunction - Function to call Edge Functions
  */
-export default function Lobby({ gameState, updateGameState, playerId, isHost }) {
+export default function Lobby({ gameState, playerId, callEdgeFunction }) {
   const [playerName, setPlayerName] = useState('');
 
   // Check if current player has joined by looking in gameState.players
   const currentPlayer = gameState.players.find(p => p.id === playerId);
   const hasJoined = !!currentPlayer;
 
-  const handleJoinGame = (e) => {
+  // Derive host status from hostId in gameState
+  const isHost = playerId === gameState.hostId;
+
+  const handleJoinGame = async (e) => {
     e.preventDefault();
     if (!playerName.trim()) return;
 
-    // Determine if this player should be host
-    // Host is the first player (index 0) in the merged player list
-    const isFirstPlayer = gameState.players.length === 0;
+    try {
+      const result = await callEdgeFunction('join-room', {
+        roomCode: gameState.roomCode,
+        playerName: playerName.trim(),
+        playerId: playerId
+      });
 
-    const newPlayer = {
-      id: playerId,
-      name: playerName.trim(),
-      isHost: isFirstPlayer
-    };
-
-    updateGameState({
-      players: [...gameState.players, newPlayer]
-    });
+      if (result.success) {
+        setPlayerName('');
+      }
+    } catch (error) {
+      console.error('Failed to join room:', error);
+      alert(error.message || 'Failed to join room');
+    }
   };
 
-  const handleStartGame = () => {
+  const handleStartGame = async () => {
     if (gameState.players.length < GAME_CONFIG.MIN_PLAYERS) {
       alert(`Need at least ${GAME_CONFIG.MIN_PLAYERS} players to start!`);
       return;
     }
 
-    // Select random first player
-    const randomPlayerIndex = Math.floor(Math.random() * gameState.players.length);
+    try {
+      const result = await callEdgeFunction('start-game', {
+        roomCode: gameState.roomCode,
+        playerId: playerId
+      });
 
-    updateGameState({
-      status: GAME_CONFIG.STATUS.PLAYING,
-      currentLevel: 5, // Start at most intimate level
-      currentPlayerIndex: randomPlayerIndex,
-      questionCount: 0
-    });
+      if (result.success) {
+        // Game state will update automatically via Realtime
+        console.log('Game started successfully');
+      }
+    } catch (error) {
+      console.error('Failed to start game:', error);
+      alert(error.message || 'Failed to start game');
+    }
   };
 
   const canStart = isHost && gameState.players.length >= GAME_CONFIG.MIN_PLAYERS;
@@ -102,7 +110,7 @@ export default function Lobby({ gameState, updateGameState, playerId, isHost }) 
                   className="bg-gray-50 rounded-xl p-3 flex items-center justify-between"
                 >
                   <span className="font-medium text-gray-800">{player.name}</span>
-                  {player.isHost && (
+                  {player.id === gameState.hostId && (
                     <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
                       Host
                     </span>
