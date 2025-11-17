@@ -19,13 +19,20 @@ Your cleanup functions existed but weren't running automatically. Here's why:
 
 ## How to Apply the Fix
 
+> **Note:** Migrations have been reorganized. Cleanup functionality is now split across:
+> - **002_game_logic.sql** - Cleanup functions
+> - **003_api.sql** - `preview_cleanup()` function
+> - **005_scheduled_jobs.sql** - pg_cron scheduled jobs
+>
+> See `MIGRATION_REORGANIZATION.md` for full details.
+
 ### Option 1: Using Supabase CLI (Recommended)
 
 ```bash
 # Make sure you're in the project directory
 cd /home/user/LOI
 
-# Apply the new migration
+# Apply all migrations (they're idempotent, safe to re-run)
 supabase db push
 
 # Or if migrations aren't synced:
@@ -36,14 +43,19 @@ supabase migration up
 
 1. Go to your Supabase project dashboard
 2. Navigate to **SQL Editor**
-3. Copy the contents of `supabase/migrations/004_setup_automatic_cleanup.sql`
-4. Paste and run the SQL
+3. Run migrations in order:
+   - `supabase/migrations/002_game_logic.sql` (cleanup functions)
+   - `supabase/migrations/003_api.sql` (preview_cleanup)
+   - `supabase/migrations/005_scheduled_jobs.sql` (pg_cron jobs)
+4. Paste and run each SQL file
 
 ### Option 3: Manual SQL Execution
 
-```sql
--- Run this in Supabase SQL Editor or via psql
-\i supabase/migrations/004_setup_automatic_cleanup.sql
+```bash
+# Run migrations via psql (in order)
+psql -f supabase/migrations/002_game_logic.sql
+psql -f supabase/migrations/003_api.sql
+psql -f supabase/migrations/005_scheduled_jobs.sql
 ```
 
 ---
@@ -218,7 +230,7 @@ SELECT cron.schedule(
 
 ### Adjust Inactive Player Threshold
 
-Edit `cleanup_inactive_players()` in migration 001:
+Edit `cleanup_inactive_players()` in **migration 002_game_logic.sql**:
 
 ```sql
 -- Change 30 seconds to 60 seconds
@@ -228,7 +240,7 @@ WHERE last_heartbeat < NOW() - INTERVAL '60 seconds';
 
 ### Adjust Old Room Threshold
 
-Edit `cleanup_old_rooms()` in migration 004:
+Edit `cleanup_old_rooms()` in **migration 002_game_logic.sql**:
 
 ```sql
 -- Change 2 hours to 4 hours
