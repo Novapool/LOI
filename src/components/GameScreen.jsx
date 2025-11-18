@@ -43,15 +43,6 @@ export default function GameScreen({ gameState, playerId }) {
 
   const handleNextTurn = async () => {
     try {
-      // Fetch current asked questions from database (single source of truth)
-      const { data: currentState } = await supabase
-        .from('game_state')
-        .select('asked_questions')
-        .eq('room_code', gameState.roomCode)
-        .single();
-
-      const askedQs = currentState?.asked_questions || [];
-
       // Call advance_turn RPC function
       const { data, error } = await supabase.rpc('advance_turn', {
         room_code_param: gameState.roomCode,
@@ -67,20 +58,9 @@ export default function GameScreen({ gameState, playerId }) {
         throw new Error(data?.error || 'Failed to advance turn');
       }
 
-      // Database trigger handles game finished status, no need to check here
-      // Realtime subscription will update status automatically
-
-      // Set the next question using updated asked questions from database
-      const nextQuestion = getRandomQuestion(
-        data.gameState.currentLevel,
-        [...askedQs, gameState.currentQuestion]
-      );
-
-      // Update question in database
-      await supabase
-        .from('game_state')
-        .update({ current_question: nextQuestion })
-        .eq('room_code', gameState.roomCode);
+      // Database trigger handles game finished status, and sets current_question to null
+      // The NEW current player will set their question via the useEffect above
+      // Realtime subscription will broadcast the turn change automatically
 
     } catch (error) {
       console.error('Failed to advance turn:', error);

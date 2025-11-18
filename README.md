@@ -14,8 +14,8 @@ Think: **Codenames meets Truth or Dare meets philosophical speed-dating.**
 
 - 🎲 **Reverse Vulnerability** - Start deep, end shallow (the opposite of normal conversation)
 - 📱 **Phone-Based** - Everyone joins on their own device using a room code
-- ⚡ **Real-time Sync** - All devices stay perfectly in sync via Supabase
-- 🔄 **Ephemeral Rooms** - No data persistence, rooms disappear when everyone leaves
+- ⚡ **Real-time Sync** - All devices stay perfectly in sync via Postgres Realtime
+- 🔄 **Auto-Cleanup** - Rooms automatically deleted when inactive (2 hours) or empty
 - 🎯 **Simple UX** - One-tap to answer, automatic turn progression
 - 🌐 **No Login Required** - Just enter a name and jump in
 
@@ -30,9 +30,11 @@ Think: **Codenames meets Truth or Dare meets philosophical speed-dating.**
 - **Vercel** - Deployment platform
 
 ### Backend
-- **Supabase Realtime Broadcast** - WebSocket-based state synchronization
-- No custom server needed
-- No database tables (fully ephemeral)
+- **PostgreSQL** - Database-authoritative game logic
+- **Supabase Postgres Realtime** - Change Data Capture (CDC) for real-time sync
+- **PostgreSQL Triggers** - Server-side game logic and validation
+- **RPC Functions** - API layer for client operations
+- **pg_cron** - Scheduled cleanup jobs
 
 ---
 
@@ -80,19 +82,22 @@ Think: **Codenames meets Truth or Dare meets philosophical speed-dating.**
 ### Room Creation & Joining
 ```
 User A (Host)
-  ↓ Creates game with name
-  ↓ Gets room code "XK7D"
-  ↓ Subscribes to Supabase channel "game:XK7D"
+  ↓ Calls create_game_room RPC function
+  ↓ PostgreSQL generates unique room code "XK7D"
+  ↓ Inserts into game_rooms and game_players tables
+  ↓ Client subscribes to Postgres CDC for room "XK7D"
 
 Users B, C, D
   ↓ Enter code "XK7D" + names
-  ↓ Subscribe to same channel
+  ↓ Insert into game_players table
+  ↓ Database trigger validates (room exists, not full, etc.)
+  ↓ Subscribe to same Postgres CDC channel
 
-Supabase Realtime
-  ↓ Broadcasts player list to all devices
+Postgres Realtime (CDC)
+  ↓ Broadcasts INSERT events to all subscribers
 
 All Devices
-  ↓ Update lobby UI in real-time
+  ↓ Update lobby UI in real-time via WebSocket
 ```
 
 ### Turn Progression
@@ -102,22 +107,24 @@ Current Player
   ↓ Clicks "I'm Done Answering"
 
 Frontend
-  ↓ Selects next random player
-  ↓ Pulls new question from current level
-  ↓ Broadcasts updated game state:
-     {
-       currentLevel: 5,
-       currentPlayerIndex: 2,
-       currentQuestion: "What keeps you awake at 3am?",
-       players: ["Laith", "Sarah", "Mike", "Jordan"]
-     }
+  ↓ Calls advance_turn RPC function
+  ↓ Passes: room code, player ID, current question
 
-Supabase
-  ↓ Pushes state to all subscribed clients (< 50ms)
+PostgreSQL
+  ↓ Validates requester is current player
+  ↓ Increments question_count
+  ↓ Adds question to asked_questions array
+  ↓ Trigger: process_next_turn checks if level should decrease
+  ↓ Selects next random player (excluding current)
+  ↓ Updates game_state table
+
+Postgres Realtime (CDC)
+  ↓ Broadcasts UPDATE event to all subscribers (< 50ms)
 
 All Devices
-  ↓ Highlight new current player
-  ↓ Display new question
+  ↓ Update highlighted player
+  ↓ Current player sets next question from pool
+  ↓ Updates current_question in database
 ```
 
 ---
@@ -130,19 +137,32 @@ All Devices
 │  (Host)     │         │             │         │             │
 └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
        │                       │                       │
-       │ Subscribe to          │ Subscribe to          │ Subscribe to
-       │ channel "game:XK7D"   │ channel "game:XK7D"   │ channel "game:XK7D"
+       │ Insert/Update         │ Subscribe to          │ Subscribe to
+       │ Database Tables       │ Postgres CDC          │ Postgres CDC
        │                       │                       │
        └───────────────────────┼───────────────────────┘
                                │
                                ▼
                     ┌──────────────────────┐
-                    │  SUPABASE REALTIME   │
-                    │  Channel: "game:XK7D"│
+                    │   POSTGRESQL DB      │
+                    │  ┌────────────────┐  │
+                    │  │ game_rooms     │  │
+                    │  │ game_players   │  │
+                    │  │ game_state     │  │
+                    │  └────────────────┘  │
+                    │  Triggers validate   │
+                    │  and process logic   │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │  POSTGRES REALTIME   │
+                    │  (Change Data        │
+                    │   Capture - CDC)     │
                     │                      │
-                    │  Broadcasts state    │
-                    │  to all subscribers  │
-                    └──────────────────────┘
+                    │  Broadcasts changes  │
+                    │  via WebSocket       │
+                    └──────────┬───────────┘
                                │
        ┌───────────────────────┼───────────────────────┐
        │                       │                       │
@@ -156,7 +176,7 @@ All Devices
 └─────────────┘         └─────────────┘         └─────────────┘
 ```
 
-**Key Insight:** Supabase acts as a "megaphone" - when one device shouts an update, all others hear it instantly. No server logic needed.
+**Key Insight:** PostgreSQL is the single source of truth. Database triggers handle all game logic server-side. Postgres Realtime (CDC) broadcasts table changes to all subscribed clients via WebSocket.
 
 ---
 
@@ -281,9 +301,13 @@ export const GAME_CONFIG = {
 ### Supabase Setup
 
 1. Create a new Supabase project
-2. Enable Realtime in Settings → API
-3. Copy URL + anon key to `.env.local`
-4. No database tables needed - just use Broadcast channels
+2. Run migrations in `supabase/migrations/` folder (001-005) to create:
+   - Database tables (game_rooms, game_players, game_state, game_events)
+   - Triggers for game logic and validation
+   - RPC functions (create_game_room, advance_turn)
+   - Scheduled cleanup jobs (pg_cron)
+3. Enable Realtime for tables in Settings → Database → Replication
+4. Copy URL + anon key to `.env.local`
 
 ---
 
