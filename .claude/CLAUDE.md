@@ -94,46 +94,81 @@ Frontend updates game_rooms table directly
   ↓
 Database trigger: initialize_game_state_trigger
   - Validates minimum players met (3+)
+  - Fetches all players and shuffles order (Fisher-Yates)
   - Creates game_state row:
     - currentLevel: 5
-    - currentPlayerIndex: random(0-N)
+    - playerOrder: [shuffled array of player IDs]
+    - currentAskerIndex: 0 (first player asks)
+    - currentAnswererIndex: 1 (second player answers)
+    - currentQuestion: NULL
     - questionCount: 0
   - Auto-committed with room status update
   ↓
 Postgres Realtime broadcasts INSERT (game_state) + UPDATE (game_rooms)
   ↓
-All devices render game screen with highlighted current player
+All devices render game screen with asker/answerer indicators
   ↓
-Client sets first question (server doesn't have question bank)
+Asker sees question selector UI (bank options + custom input)
 ```
 
-### 4. Turn Progression
+### 4. Question Selection (NEW)
 ```
-Current player clicks "Done Answering"
+Asker player sees QuestionSelector UI
+  ↓
+Shows 3-5 random questions from current level
+  - Can refresh for new options
+  - Can write custom question (min 10 chars)
+  ↓
+Asker selects/writes question and clicks "Ask Question"
+  ↓
+Frontend calls RPC function: set_question
+  {roomCode, playerId, questionText, isCustom}
+  ↓
+RPC function validates & updates:
+  - Verifies playerId matches current asker
+  - Validates question not empty
+  - Updates game_state:
+    - currentQuestion: questionText
+    - isCustomQuestion: true/false
+  - Returns {success, question}
+  ↓
+Postgres Realtime broadcasts UPDATE event (CDC)
+  ↓
+All devices receive update via WebSocket:
+  - Answerer sees question with "I'm Done Answering" button
+  - Other players see question (read-only)
+  - Custom questions show purple badge
+```
+
+### 5. Turn Progression (UPDATED)
+```
+Answerer clicks "I'm Done Answering"
   ↓
 Frontend calls RPC function: advance_turn
   {roomCode, playerId, currentQuestion}
   ↓
 RPC function validates & updates:
-  - playerId matches current player in game_state
+  - playerId matches current ANSWERER (not asker)
   - Increments questionCount
-  - Checks if level should decrease (via process_next_turn trigger)
-  - Selects next random player (excluding current)
   - Adds currentQuestion to asked_questions array
+  - Advances circular order:
+    - currentAskerIndex = old currentAnswererIndex
+    - currentAnswererIndex = (old currentAnswererIndex + 1) % playerCount
+  - Clears currentQuestion to NULL (for next asker to set)
   - Updates game_state table
   - Returns {success, gameState}
   ↓
 Postgres Realtime broadcasts UPDATE event (CDC)
   ↓
 All devices receive update via WebSocket:
-  - Update highlighted player
+  - Update asker/answerer indicators
   - Animate level change if applicable
   ↓
-Current player's client sets next question from client-side pool
-  (database doesn't have question bank)
+NEW asker sees question selector UI
+  (circular pattern: P1→P2→P3→P1→P2→P3...)
 ```
 
-### 5. Level Transitions
+### 6. Level Transitions (UPDATED)
 ```
 After N questions at current level:
   ↓
@@ -142,10 +177,18 @@ Database trigger: process_next_turn detects threshold
   ↓
 Trigger decrements level (5 → 4 → 3 → 2 → 1)
   ↓
+Regenerates random circular player order (NEW ORDER for new level)
+  - Fetches all players, shuffles again
+  - playerOrder: [new shuffled array]
+  ↓
 Updates game_state with:
   - currentLevel: 4
   - questionCount: 0 (reset)
-  - currentPlayerIndex: (next random player)
+  - playerOrder: [newly shuffled player IDs]
+  - currentAskerIndex: 0
+  - currentAnswererIndex: 1
+  - currentQuestion: NULL
+  - isCustomQuestion: false
   ↓
 If level 1 complete, trigger updates game_rooms.status = 'finished'
   ↓
@@ -153,9 +196,10 @@ Postgres Realtime broadcasts UPDATE (CDC)
   ↓
 All devices receive update via WebSocket:
   - Show level transition animation
+  - Update asker/answerer with new order
   - Update game status if finished
   ↓
-Current player's client selects new question from Level 4 pool
+NEW asker (first in new order) sees question selector for Level 4
 ```
 
 ---
@@ -197,10 +241,13 @@ Current player's client selects new question from Level 4 pool
   id: UUID PRIMARY KEY,
   room_code: TEXT UNIQUE NOT NULL,     // Foreign key to game_rooms
   current_level: INTEGER NOT NULL,     // 1-5
-  current_player_index: INTEGER NOT NULL,
+  player_order: JSONB NOT NULL,        // Circular array of player IDs (shuffled)
+  current_asker_index: INTEGER NOT NULL,     // Index of player asking question
+  current_answerer_index: INTEGER NOT NULL,  // Index of player answering question
   current_question: TEXT,              // Current question text
   question_count: INTEGER NOT NULL,    // Per-level counter
   asked_questions: JSONB NOT NULL,     // Array of asked questions
+  is_custom_question: BOOLEAN NOT NULL,      // Flag for custom vs bank questions
   updated_at: TIMESTAMPTZ NOT NULL
 }
 ```
@@ -221,7 +268,22 @@ Returns: { success: boolean, room: {...}, player: {...}, error?: string }
 - Adds creator as host in game_players table
 - Returns room and player data
 
-**advance_turn:**
+**set_question (NEW):**
+```sql
+SELECT * FROM set_question(
+  room_code_param TEXT,
+  player_id_param TEXT,
+  question_text TEXT,
+  is_custom_param BOOLEAN
+)
+Returns: { success: boolean, question: string, isCustom: boolean, error?: string }
+```
+- Validates player is current asker
+- Validates question not empty
+- Updates current_question and is_custom_question
+- Returns success with question details
+
+**advance_turn (UPDATED):**
 ```sql
 SELECT * FROM advance_turn(
   room_code_param TEXT,
@@ -230,25 +292,32 @@ SELECT * FROM advance_turn(
 )
 Returns: { success: boolean, gameState: {...}, error?: string }
 ```
-- Validates current player
+- Validates current ANSWERER (not asker)
 - Increments question count
 - Adds question to asked_questions array
-- Selects next random player
+- Advances circular order (answerer becomes next asker)
+- Clears current_question to NULL
 - Triggers `process_next_turn` for level transitions
 - Returns updated game state
 
 ### Database Triggers
 
-**initialize_game_state_trigger:**
+**initialize_game_state_trigger (UPDATED):**
 - Fires when game_rooms.status changes to 'playing'
-- Creates game_state record with initial values
-- Sets random starting player
+- Fetches all players and shuffles order (Fisher-Yates algorithm)
+- Creates game_state record with:
+  - Random circular player_order array
+  - currentAskerIndex: 0 (first player)
+  - currentAnswererIndex: 1 (second player)
+  - currentQuestion: NULL (asker will select)
 
-**process_next_turn:**
+**process_next_turn (UPDATED):**
 - Fires after advance_turn updates game_state
-- Checks if level should decrease
+- Checks if level should decrease (questionCount >= questionsPerLevel)
 - Handles level transitions (5 → 4 → 3 → 2 → 1)
-- Sets game_rooms.status = 'finished' when complete
+- On level transition: Regenerates NEW random circular player order
+- Resets asker/answerer indices to 0 and 1
+- Sets game_rooms.status = 'finished' when Level 1 complete
 
 **cleanup_inactive_players_trigger:**
 - Fires when a player updates their heartbeat
@@ -289,9 +358,13 @@ See `CLEANUP_GUIDE.md` for full cleanup system documentation.
   players: Array<{id, name, isHost}>,
   settings: {startLevel: 1-5, questionsPerLevel: number},
   currentLevel: 1-5,
-  currentPlayerIndex: number,
+  playerOrder: Array<string>,           // Circular array of player IDs
+  currentAskerIndex: number,            // Index of player asking question
+  currentAnswererIndex: number,         // Index of player answering question
   currentQuestion: string,
-  questionCount: number
+  questionCount: number,
+  isCustomQuestion: boolean,            // Flag for custom vs bank questions
+  askedQuestions: Array<string>         // History of asked questions
 }
 ```
 
@@ -353,22 +426,36 @@ export const questions = {
 - Host controls (start level, questions per level)
 - "Start Game" button (host only)
 
-### GameScreen.jsx (Active Game)
-**Props:** `gameState`, `onAnswerComplete`
+### GameScreen.jsx (Active Game - UPDATED)
+**Props:** `gameState`, `playerId`
 
 **Responsibilities:**
-- Display current question in large text
-- Highlight current player
-- Show current level indicator
-- "I'm Done Answering" button (current player only)
+- Calculate asker/answerer from playerOrder indices
+- Conditional rendering based on player role:
+  - **Asker (no question set):** Show QuestionSelector component
+  - **Answerer (question set):** Show QuestionCard + "I'm Done Answering" button
+  - **Watchers:** Show QuestionCard (read-only)
+- Display asker→answerer indicator
+- Highlight both asker (blue) and answerer (yellow) in player list
 - Level transition animations
 
-### QuestionCard.jsx
-**Props:** `question`, `level`, `isActive`
+### QuestionSelector.jsx (NEW Component)
+**Props:** `level`, `askedQuestions`, `targetPlayerName`, `onQuestionSelected`
+
+**Responsibilities:**
+- Display 3-5 random question options from current level
+- "Refresh Questions" button to generate new options
+- Custom question textarea input (min 10 chars, max 500 chars)
+- Selection validation (either bank question OR custom)
+- "Ask Question" button (calls set_question RPC)
+
+### QuestionCard.jsx (UPDATED)
+**Props:** `question`, `level`, `isCustomQuestion`
 
 **Responsibilities:**
 - Display question text
 - Visual styling per level (color-coded)
+- Show purple "Custom" badge if isCustomQuestion is true
 - Fade-in animation on question change
 
 ---
@@ -479,7 +566,9 @@ useEffect(() => {
 2. **No Optimistic Updates:** Database triggers handle all validation
 3. **Automatic Sync:** Postgres Realtime broadcasts changes via WebSocket
 4. **Disconnection Handling:** Show warning if Realtime connection drops
-5. **Question Assignment:** Only current player sets questions (prevents race conditions)
+5. **Question Selection:** Only current asker can set questions (prevents race conditions)
+6. **Turn Advancement:** Only current answerer can advance turns (database validates)
+7. **Circular Order:** Player order regenerates randomly on level transitions
 
 ### Code Organization
 ```

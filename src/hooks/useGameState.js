@@ -35,9 +35,12 @@ export function useGameState(roomCode, playerId) {
       questionsPerLevel: 3
     },
     currentLevel: 5,
-    currentPlayerIndex: 0,
+    playerOrder: [],
+    currentAskerIndex: 0,
+    currentAnswererIndex: 1,
     currentQuestion: null,
-    questionCount: 0
+    questionCount: 0,
+    isCustomQuestion: false
   });
 
   const [isConnected, setIsConnected] = useState(false);
@@ -107,9 +110,12 @@ export function useGameState(roomCode, playerId) {
           isHost: p.is_host
         })),
         currentLevel: gameStateData?.current_level ?? 5,
-        currentPlayerIndex: gameStateData?.current_player_index ?? 0,
+        playerOrder: gameStateData?.player_order ?? [],
+        currentAskerIndex: gameStateData?.current_asker_index ?? 0,
+        currentAnswererIndex: gameStateData?.current_answerer_index ?? 1,
         currentQuestion: gameStateData?.current_question ?? null,
-        questionCount: gameStateData?.question_count ?? 0
+        questionCount: gameStateData?.question_count ?? 0,
+        isCustomQuestion: gameStateData?.is_custom_question ?? false
       });
 
       setIsConnected(true);
@@ -204,9 +210,12 @@ export function useGameState(roomCode, playerId) {
           setGameState(prev => ({
             ...prev,
             currentLevel: newData.current_level,
-            currentPlayerIndex: newData.current_player_index,
+            playerOrder: newData.player_order,
+            currentAskerIndex: newData.current_asker_index,
+            currentAnswererIndex: newData.current_answerer_index,
             currentQuestion: newData.current_question,
-            questionCount: newData.question_count
+            questionCount: newData.question_count,
+            isCustomQuestion: newData.is_custom_question
           }));
         }
       )

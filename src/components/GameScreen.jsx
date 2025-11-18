@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
+import { useMemo } from 'react';
 import QuestionCard from './QuestionCard';
+import QuestionSelector from './QuestionSelector';
 import { GAME_CONFIG } from '../config';
-import { getRandomQuestion } from '../data/questions';
 import { supabase } from '../hooks/useGameState';
 
 /**
- * GameScreen component - Active game UI
+ * GameScreen component - Active game UI with asker/answerer pattern
  *
  * @param {Object} props
  * @param {Object} props.gameState - Current game state
@@ -13,34 +13,50 @@ import { supabase } from '../hooks/useGameState';
  */
 export default function GameScreen({ gameState, playerId }) {
 
-  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-  const isCurrentPlayer = currentPlayer?.id === playerId;
+  // Get asker and answerer from circular player order
+  const playerOrder = gameState.playerOrder || [];
+  const askerPlayerId = playerOrder[gameState.currentAskerIndex];
+  const answererPlayerId = playerOrder[gameState.currentAnswererIndex];
 
-  // Initialize first question when game starts (ONLY current player sets question)
-  useEffect(() => {
-    const setFirstQuestion = async () => {
-      if (!gameState.currentQuestion && gameState.roomCode && isCurrentPlayer) {
-        // Fetch current asked questions from database
-        const { data: state } = await supabase
-          .from('game_state')
-          .select('asked_questions')
-          .eq('room_code', gameState.roomCode)
-          .single();
+  const askerPlayer = gameState.players.find(p => p.id === askerPlayerId);
+  const answererPlayer = gameState.players.find(p => p.id === answererPlayerId);
 
-        const askedQs = state?.asked_questions || [];
-        const firstQuestion = getRandomQuestion(gameState.currentLevel, askedQs);
+  const isAsker = askerPlayerId === playerId;
+  const isAnswerer = answererPlayerId === playerId;
 
-        // Update question in database
-        await supabase
-          .from('game_state')
-          .update({ current_question: firstQuestion })
-          .eq('room_code', gameState.roomCode);
+  // Memoize askedQuestions to prevent unnecessary re-renders from heartbeat updates
+  // Only re-memoize when the actual content changes, not on object reference changes
+  const memoizedAskedQuestions = useMemo(
+    () => gameState.askedQuestions || [],
+    [JSON.stringify(gameState.askedQuestions)]
+  );
+
+  // Handle asker selecting/writing a question
+  const handleQuestionSelected = async (questionText, isCustom) => {
+    try {
+      const { data, error } = await supabase.rpc('set_question', {
+        room_code_param: gameState.roomCode,
+        player_id_param: playerId,
+        question_text: questionText,
+        is_custom_param: isCustom
+      });
+
+      if (error) {
+        throw error;
       }
-    };
 
-    setFirstQuestion();
-  }, [gameState.currentQuestion, gameState.roomCode, isCurrentPlayer]);
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to set question');
+      }
 
+      // Realtime subscription will broadcast the question update automatically
+    } catch (error) {
+      console.error('Failed to set question:', error);
+      alert(error.message || 'Failed to set question');
+    }
+  };
+
+  // Handle answerer finishing their answer
   const handleNextTurn = async () => {
     try {
       // Call advance_turn RPC function
@@ -58,9 +74,11 @@ export default function GameScreen({ gameState, playerId }) {
         throw new Error(data?.error || 'Failed to advance turn');
       }
 
-      // Database trigger handles game finished status, and sets current_question to null
-      // The NEW current player will set their question via the useEffect above
-      // Realtime subscription will broadcast the turn change automatically
+      // Database trigger handles:
+      // - Level transitions
+      // - Circular order advancement (answerer becomes asker)
+      // - Clearing current_question for next asker
+      // Realtime subscription will broadcast changes automatically
 
     } catch (error) {
       console.error('Failed to advance turn:', error);
@@ -109,29 +127,70 @@ export default function GameScreen({ gameState, playerId }) {
           <div className="text-right text-white">
             <p className="text-sm opacity-80">Question</p>
             <p className="text-2xl font-bold">
-              {gameState.questionCount + 1}/{GAME_CONFIG.QUESTIONS_PER_LEVEL}
+              {gameState.questionCount + 1}/{gameState.settings.questionsPerLevel || GAME_CONFIG.QUESTIONS_PER_LEVEL}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Current Player Indicator */}
+      {/* Asker/Answerer Indicator */}
       <div className="max-w-4xl mx-auto mb-8">
         <div className="bg-white/20 backdrop-blur-md rounded-2xl p-6 text-center">
-          <p className="text-white/80 text-sm mb-2">Current Player</p>
-          <p className="text-white text-3xl font-bold">{currentPlayer?.name}</p>
-          {isCurrentPlayer && (
-            <p className="text-yellow-300 text-sm mt-2 font-semibold">It's your turn!</p>
+          {isAsker && !gameState.currentQuestion ? (
+            <div>
+              <p className="text-white/80 text-sm mb-2">You are asking</p>
+              <p className="text-white text-3xl font-bold">{answererPlayer?.name}</p>
+              <p className="text-yellow-300 text-sm mt-2 font-semibold">Select or write a question!</p>
+            </div>
+          ) : isAnswerer && gameState.currentQuestion ? (
+            <div>
+              <p className="text-white/80 text-sm mb-2">{askerPlayer?.name} is asking you</p>
+              <p className="text-yellow-300 text-sm mt-2 font-semibold">It's your turn to answer!</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-white/80 text-sm mb-2">Current Turn</p>
+              <p className="text-white text-2xl font-bold">
+                {askerPlayer?.name} → {answererPlayer?.name}
+              </p>
+              <p className="text-white/60 text-sm mt-2">
+                {!gameState.currentQuestion ? 'Selecting question...' : 'Answering...'}
+              </p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* Question Card */}
+      {/* Main Content Area */}
       <div className="mb-8">
-        <QuestionCard
-          question={gameState.currentQuestion || 'Loading...'}
-          level={gameState.currentLevel}
-        />
+        {/* Asker View: Question Selector */}
+        {isAsker && !gameState.currentQuestion ? (
+          <QuestionSelector
+            level={gameState.currentLevel}
+            askedQuestions={memoizedAskedQuestions}
+            targetPlayerName={answererPlayer?.name}
+            onQuestionSelected={handleQuestionSelected}
+          />
+        ) : gameState.currentQuestion ? (
+          /* Everyone else: Question Card Display */
+          <QuestionCard
+            question={gameState.currentQuestion}
+            level={gameState.currentLevel}
+            isCustomQuestion={gameState.isCustomQuestion}
+          />
+        ) : (
+          /* Waiting for asker to select question */
+          <div className="w-full max-w-2xl mx-auto">
+            <div className="bg-white rounded-3xl shadow-2xl p-12 text-center">
+              <div className="animate-pulse">
+                <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4"></div>
+                <p className="text-xl text-gray-600">
+                  Waiting for {askerPlayer?.name} to select a question...
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Player List */}
@@ -139,25 +198,34 @@ export default function GameScreen({ gameState, playerId }) {
         <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6">
           <h3 className="text-white text-lg font-semibold mb-4">Players</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {gameState.players.map((player, idx) => (
-              <div
-                key={player.id}
-                className={`rounded-xl p-3 text-center transition ${
-                  idx === gameState.currentPlayerIndex
-                    ? 'bg-yellow-400 text-gray-900 font-bold'
-                    : 'bg-white/20 text-white'
-                }`}
-              >
-                {player.name}
-              </div>
-            ))}
+            {gameState.players.map((player) => {
+              const isCurrentAsker = player.id === askerPlayerId;
+              const isCurrentAnswerer = player.id === answererPlayerId;
+
+              return (
+                <div
+                  key={player.id}
+                  className={`rounded-xl p-3 text-center transition ${
+                    isCurrentAsker
+                      ? 'bg-blue-400 text-gray-900 font-bold border-2 border-blue-600'
+                      : isCurrentAnswerer
+                      ? 'bg-yellow-400 text-gray-900 font-bold border-2 border-yellow-600'
+                      : 'bg-white/20 text-white'
+                  }`}
+                >
+                  {player.name}
+                  {isCurrentAsker && <div className="text-xs mt-1">Asking</div>}
+                  {isCurrentAnswerer && <div className="text-xs mt-1">Answering</div>}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* Control Button */}
       <div className="max-w-2xl mx-auto">
-        {isCurrentPlayer ? (
+        {isAnswerer && gameState.currentQuestion ? (
           <button
             onClick={handleNextTurn}
             className="w-full bg-green-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-600 transition transform hover:scale-105 shadow-lg"
@@ -166,7 +234,10 @@ export default function GameScreen({ gameState, playerId }) {
           </button>
         ) : (
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-center text-white">
-            Waiting for {currentPlayer?.name} to finish answering...
+            {!gameState.currentQuestion
+              ? `Waiting for ${askerPlayer?.name} to select a question...`
+              : `Waiting for ${answererPlayer?.name} to finish answering...`
+            }
           </div>
         )}
       </div>

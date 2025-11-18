@@ -52,15 +52,23 @@ Think: **Codenames meets Truth or Dare meets philosophical speed-dating.**
    → See lobby with all connected players
 
 3. GAME STARTS (Level 5)
-   → Random player gets a deep question
-   → They answer aloud
-   → Click "Done" to pass turn to next random player
+   → Random circular order generated (e.g., P1→P2→P3→P1)
+   → First player (asker) selects/writes a question for second player (answerer)
+   → Answerer responds aloud
+   → Click "Done" to advance to next in circle
 
-4. LEVEL PROGRESSION
+4. TURN PROGRESSION
+   → Asker sees 3-5 question options + custom input field
+   → Selects or writes question → Asks answerer
+   → Answerer answers aloud → Clicks "I'm Done Answering"
+   → Answerer becomes next asker in circular pattern (P1→P2→P3→P1→P2...)
+
+5. LEVEL PROGRESSION
    → After N questions, level decreases (5 → 4 → 3 → 2 → 1)
    → Questions get progressively less vulnerable
+   → NEW random circular order generated for each level
 
-5. GAME ENDS
+6. GAME ENDS
    → Reaches Level 1 questions
    → Players can restart or leave
 ```
@@ -102,7 +110,27 @@ All Devices
 
 ### Turn Progression
 ```
-Current Player
+Asker Player
+  ↓ Sees QuestionSelector UI with 3-5 options + custom input
+  ↓ Selects or writes question
+  ↓ Clicks "Ask Question"
+
+Frontend
+  ↓ Calls set_question RPC function
+  ↓ Passes: room code, player ID, question text, is_custom flag
+
+PostgreSQL
+  ↓ Validates requester is current asker
+  ↓ Updates current_question and is_custom_question in game_state
+
+Postgres Realtime (CDC)
+  ↓ Broadcasts UPDATE event to all subscribers (< 50ms)
+
+All Devices
+  ↓ Display question to answerer (+ "I'm Done Answering" button)
+  ↓ Other players see question (read-only)
+
+Answerer Player
   ↓ Answers question aloud
   ↓ Clicks "I'm Done Answering"
 
@@ -111,20 +139,20 @@ Frontend
   ↓ Passes: room code, player ID, current question
 
 PostgreSQL
-  ↓ Validates requester is current player
+  ↓ Validates requester is current answerer
   ↓ Increments question_count
   ↓ Adds question to asked_questions array
+  ↓ Advances circular order (answerer → next asker)
+  ↓ Clears current_question to NULL
   ↓ Trigger: process_next_turn checks if level should decrease
-  ↓ Selects next random player (excluding current)
   ↓ Updates game_state table
 
 Postgres Realtime (CDC)
   ↓ Broadcasts UPDATE event to all subscribers (< 50ms)
 
 All Devices
-  ↓ Update highlighted player
-  ↓ Current player sets next question from pool
-  ↓ Updates current_question in database
+  ↓ Update asker/answerer indicators
+  ↓ New asker sees QuestionSelector UI
 ```
 
 ---
@@ -220,14 +248,22 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 intimacy-ladder/
 ├── src/
 │   ├── components/
-│   │   ├── Lobby.jsx          # Room creation & player joining
-│   │   ├── GameScreen.jsx     # Active game UI
-│   │   └── QuestionCard.jsx   # Question display component
+│   │   ├── Lobby.jsx             # Room creation & player joining
+│   │   ├── GameScreen.jsx        # Active game UI (asker/answerer logic)
+│   │   ├── QuestionSelector.jsx  # Question picker UI (NEW)
+│   │   └── QuestionCard.jsx      # Question display component
 │   ├── hooks/
-│   │   └── useGameState.js    # Supabase real-time logic
+│   │   └── useGameState.js       # Supabase real-time logic
 │   ├── data/
-│   │   └── questions.js       # Question bank (5 levels)
+│   │   └── questions.js          # Question bank (5 levels) + selection utils
+│   ├── config.js                 # Game configuration constants
 │   └── App.jsx
+├── supabase/
+│   └── migrations/
+│       ├── 001_schema.sql
+│       ├── 002_game_logic.sql
+│       ├── 003_api.sql
+│       └── 007_question_selection_flow.sql  # NEW: Circular order & question selection
 ├── public/
 └── package.json
 ```
@@ -301,13 +337,21 @@ export const GAME_CONFIG = {
 ### Supabase Setup
 
 1. Create a new Supabase project
-2. Run migrations in `supabase/migrations/` folder (001-005) to create:
+2. Run migrations in `supabase/migrations/` folder (001-007) to create:
    - Database tables (game_rooms, game_players, game_state, game_events)
    - Triggers for game logic and validation
-   - RPC functions (create_game_room, advance_turn)
+   - RPC functions (create_game_room, set_question, advance_turn)
+   - Helper functions (shuffle_player_ids for circular order)
    - Scheduled cleanup jobs (pg_cron)
 3. Enable Realtime for tables in Settings → Database → Replication
 4. Copy URL + anon key to `.env.local`
+
+**Migration 007 (NEW):** Adds question selection and circular turn order:
+- `player_order` - Circular array of player IDs (shuffled each level)
+- `current_asker_index` / `current_answerer_index` - Replaces single player index
+- `is_custom_question` - Flags custom vs bank questions
+- `set_question` RPC - Asker selects/writes question
+- Updated triggers for circular progression
 
 ---
 

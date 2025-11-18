@@ -184,3 +184,23 @@ export function getRandomQuestion(level, exclude = []) {
 
   return available[Math.floor(Math.random() * available.length)];
 }
+
+/**
+ * Get multiple random questions from a specific level
+ *
+ * @param {number} level - The question level (1-5)
+ * @param {number} count - Number of questions to return (default 5)
+ * @param {Array} exclude - Questions to exclude from selection
+ * @returns {Array<string>} Array of random questions from the level
+ */
+export function getRandomQuestions(level, count = 5, exclude = []) {
+  const questions = QUESTIONS[level] || QUESTIONS[1];
+  const available = questions.filter(q => !exclude.includes(q));
+
+  // If not enough available questions, use all questions
+  const pool = available.length >= count ? available : questions;
+
+  // Shuffle and take first N questions
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+}
