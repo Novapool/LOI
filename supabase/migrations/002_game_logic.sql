@@ -177,7 +177,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function: Process turn advancement logic
+-- Function: Process turn advancement logic (handles level transitions only)
 CREATE OR REPLACE FUNCTION process_next_turn()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -185,8 +185,6 @@ DECLARE
   questions_per_level INTEGER;
   new_question_count INTEGER;
   new_level INTEGER;
-  player_count INTEGER;
-  next_index INTEGER;
 BEGIN
   -- Get room settings
   SELECT settings INTO room_settings FROM game_rooms WHERE room_code = NEW.room_code;
@@ -210,6 +208,10 @@ BEGIN
         'oldLevel', NEW.current_level,
         'newLevel', new_level
       ));
+
+      -- Update game state with new level and reset question count
+      NEW.current_level := new_level;
+      NEW.question_count := new_question_count;
     ELSE
       -- Game finished (level 1 complete)
       UPDATE game_rooms SET status = 'finished' WHERE room_code = NEW.room_code;
@@ -218,29 +220,8 @@ BEGIN
       VALUES (NEW.room_code, 'game_finished', jsonb_build_object(
         'finalLevel', 1
       ));
-
-      RETURN NEW;
     END IF;
   END IF;
-
-  -- Select next random player (excluding current)
-  SELECT COUNT(*) INTO player_count FROM game_players WHERE room_code = NEW.room_code;
-
-  IF player_count > 1 THEN
-    LOOP
-      next_index := floor(random() * player_count)::INTEGER;
-      EXIT WHEN next_index != NEW.current_player_index;
-    END LOOP;
-  ELSE
-    next_index := NEW.current_player_index;
-  END IF;
-
-  -- Update game state with new values
-  NEW.current_level := new_level;
-  NEW.current_player_index := next_index;
-  NEW.question_count := new_question_count;
-  NEW.current_question := NULL; -- Client will set new question
-  NEW.updated_at := NOW();
 
   RETURN NEW;
 END;
