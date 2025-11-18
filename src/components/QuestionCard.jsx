@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { GAME_CONFIG } from '../config';
 
 /**
@@ -8,7 +9,7 @@ import { GAME_CONFIG } from '../config';
  * @param {number} props.level - The current level (1-5)
  * @param {boolean} props.isCustomQuestion - Whether this is a custom question
  */
-export default function QuestionCard({ question, level, isCustomQuestion = false }) {
+function QuestionCard({ question, level, isCustomQuestion = false }) {
   const levelColor = GAME_CONFIG.LEVEL_COLORS[level];
   const levelName = GAME_CONFIG.LEVEL_NAMES[level];
 
@@ -54,3 +55,5 @@ export default function QuestionCard({ question, level, isCustomQuestion = false
     </div>
   );
 }
+
+export default memo(QuestionCard);

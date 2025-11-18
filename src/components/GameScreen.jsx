@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo, useCallback } from 'react';
 import QuestionCard from './QuestionCard';
 import QuestionSelector from './QuestionSelector';
 import { GAME_CONFIG } from '../config';
@@ -11,7 +11,7 @@ import { supabase } from '../hooks/useGameState';
  * @param {Object} props.gameState - Current game state
  * @param {string} props.playerId - Current player's ID
  */
-export default function GameScreen({ gameState, playerId }) {
+function GameScreen({ gameState, playerId }) {
 
   // Get asker and answerer from circular player order
   const playerOrder = gameState.playerOrder || [];
@@ -25,14 +25,14 @@ export default function GameScreen({ gameState, playerId }) {
   const isAnswerer = answererPlayerId === playerId;
 
   // Memoize askedQuestions to prevent unnecessary re-renders from heartbeat updates
-  // Only re-memoize when the actual content changes, not on object reference changes
+  // Only re-memoize when the actual array reference changes
   const memoizedAskedQuestions = useMemo(
     () => gameState.askedQuestions || [],
-    [JSON.stringify(gameState.askedQuestions)]
+    [gameState.askedQuestions]
   );
 
-  // Handle asker selecting/writing a question
-  const handleQuestionSelected = async (questionText, isCustom) => {
+  // Handle asker selecting/writing a question - memoized to prevent re-creation
+  const handleQuestionSelected = useCallback(async (questionText, isCustom) => {
     try {
       const { data, error } = await supabase.rpc('set_question', {
         room_code_param: gameState.roomCode,
@@ -51,13 +51,15 @@ export default function GameScreen({ gameState, playerId }) {
 
       // Realtime subscription will broadcast the question update automatically
     } catch (error) {
-      console.error('Failed to set question:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to set question:', error);
+      }
       alert(error.message || 'Failed to set question');
     }
-  };
+  }, [gameState.roomCode, playerId]);
 
-  // Handle answerer finishing their answer
-  const handleNextTurn = async () => {
+  // Handle answerer finishing their answer - memoized to prevent re-creation
+  const handleNextTurn = useCallback(async () => {
     try {
       // Call advance_turn RPC function
       const { data, error } = await supabase.rpc('advance_turn', {
@@ -81,10 +83,12 @@ export default function GameScreen({ gameState, playerId }) {
       // Realtime subscription will broadcast changes automatically
 
     } catch (error) {
-      console.error('Failed to advance turn:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to advance turn:', error);
+      }
       alert(error.message || 'Failed to advance turn');
     }
-  };
+  }, [gameState.roomCode, playerId, gameState.currentQuestion]);
 
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {
     return (
@@ -244,3 +248,5 @@ export default function GameScreen({ gameState, playerId }) {
     </div>
   );
 }
+
+export default memo(GameScreen);

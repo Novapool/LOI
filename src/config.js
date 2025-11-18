@@ -10,6 +10,9 @@ export const GAME_CONFIG = {
   MIN_PLAYERS: 2,
   MAX_PLAYERS: 10,
 
+  // Heartbeat interval in milliseconds (30 seconds - reduced from 10s for better performance)
+  HEARTBEAT_INTERVAL: 30000,
+
   // Game status constants
   STATUS: {
     LOBBY: 'lobby',

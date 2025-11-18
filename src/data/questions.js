@@ -200,7 +200,11 @@ export function getRandomQuestions(level, count = 5, exclude = []) {
   // If not enough available questions, use all questions
   const pool = available.length >= count ? available : questions;
 
-  // Shuffle and take first N questions
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  // Use Fisher-Yates shuffle algorithm for proper randomization
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
   return shuffled.slice(0, Math.min(count, shuffled.length));
 }
