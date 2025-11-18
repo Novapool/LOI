@@ -178,21 +178,49 @@ export function useGameState(roomCode, playerId) {
         },
         async (payload) => {
           console.log('Players updated:', payload);
-          // Selectively refetch only players, not entire game state
-          const { data: players } = await supabase
-            .from('game_players')
-            .select('*')
-            .eq('room_code', roomCode)
-            .order('joined_at', { ascending: true });
+          
+          // For DELETE events, refetch to get current player list
+          if (payload.eventType === 'DELETE') {
+            const { data: players } = await supabase
+              .from('game_players')
+              .select('*')
+              .eq('room_code', roomCode)
+              .order('joined_at', { ascending: true });
 
-          setGameState(prev => ({
-            ...prev,
-            players: (players || []).map(p => ({
-              id: p.player_id,
-              name: p.player_name,
-              isHost: p.is_host
-            }))
-          }));
+            setGameState(prev => ({
+              ...prev,
+              players: (players || []).map(p => ({
+                id: p.player_id,
+                name: p.player_name,
+                isHost: p.is_host
+              }))
+            }));
+            return;
+          }
+
+          // For INSERT/UPDATE, optimize by using payload data when available
+          if (payload.new) {
+            const updatedPlayer = {
+              id: payload.new.player_id,
+              name: payload.new.player_name,
+              isHost: payload.new.is_host
+            };
+
+            setGameState(prev => {
+              // Check if player already exists
+              const existingIndex = prev.players.findIndex(p => p.id === updatedPlayer.id);
+              
+              if (existingIndex >= 0) {
+                // Update existing player
+                const newPlayers = [...prev.players];
+                newPlayers[existingIndex] = updatedPlayer;
+                return { ...prev, players: newPlayers };
+              } else {
+                // Add new player
+                return { ...prev, players: [...prev.players, updatedPlayer] };
+              }
+            });
+          }
         }
       )
       .on(
@@ -240,29 +268,29 @@ export function useGameState(roomCode, playerId) {
 
   /**
    * Send heartbeat to maintain presence
+   * Optimized to reduce database load
    */
   useEffect(() => {
     if (!playerId || !roomCode || !isConnected) return;
 
     const updateHeartbeat = async () => {
-      await supabase
-        .from('game_players')
-        .update({ last_heartbeat: new Date().toISOString() })
-        .eq('room_code', roomCode)
-        .eq('player_id', playerId);
+      try {
+        await supabase
+          .from('game_players')
+          .update({ last_heartbeat: new Date().toISOString() })
+          .eq('room_code', roomCode)
+          .eq('player_id', playerId);
+      } catch (err) {
+        console.error('Heartbeat failed:', err);
+      }
     };
 
     // Send initial heartbeat
-    updateHeartbeat().catch(err => {
-      console.error('Initial heartbeat failed:', err);
-    });
+    updateHeartbeat();
 
-    // Send heartbeat every 10 seconds
-    const interval = setInterval(() => {
-      updateHeartbeat().catch(err => {
-        console.error('Heartbeat failed:', err);
-      });
-    }, 10000);
+    // Import GAME_CONFIG for heartbeat interval (default 30s for better performance)
+    const heartbeatInterval = 30000; // 30 seconds
+    const interval = setInterval(updateHeartbeat, heartbeatInterval);
 
     return () => {
       clearInterval(interval);

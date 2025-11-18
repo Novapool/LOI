@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
 
@@ -9,7 +9,7 @@ import { supabase } from '../hooks/useGameState';
  * @param {Object} props.gameState - Current game state
  * @param {string} props.playerId - Current player's ID
  */
-export default function Lobby({ gameState, playerId }) {
+function Lobby({ gameState, playerId }) {
   const [playerName, setPlayerName] = useState('');
 
   // Check if current player has joined by looking in gameState.players
@@ -169,3 +169,5 @@ export default function Lobby({ gameState, playerId }) {
     </div>
   );
 }
+
+export default memo(Lobby);

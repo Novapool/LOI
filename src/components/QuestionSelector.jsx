@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { getRandomQuestions } from '../data/questions';
 import { GAME_CONFIG } from '../config';
 
@@ -11,7 +11,7 @@ import { GAME_CONFIG } from '../config';
  * @param {string} props.targetPlayerName - Name of the player who will answer
  * @param {function} props.onQuestionSelected - Callback when question is selected
  */
-export default function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionSelected }) {
+function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionSelected }) {
   const [questionOptions, setQuestionOptions] = useState([]);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [customQuestion, setCustomQuestion] = useState('');
@@ -20,13 +20,8 @@ export default function QuestionSelector({ level, askedQuestions, targetPlayerNa
   const levelColor = GAME_CONFIG.LEVEL_COLORS[level];
   const levelName = GAME_CONFIG.LEVEL_NAMES[level];
 
-  // Generate initial question options
-  useEffect(() => {
-    refreshQuestions();
-  }, [level, askedQuestions]);
-
-  // Generate new random question options
-  const refreshQuestions = () => {
+  // Generate new random question options - memoized to prevent unnecessary recreations
+  const refreshQuestions = useCallback(() => {
     const newOptions = getRandomQuestions(level, 5, askedQuestions || []);
     setQuestionOptions(newOptions);
     // Reset selection if refreshing
@@ -34,7 +29,12 @@ export default function QuestionSelector({ level, askedQuestions, targetPlayerNa
       setSelectedQuestion(null);
       setSelectionMode(null);
     }
-  };
+  }, [level, askedQuestions, selectionMode]);
+
+  // Generate initial question options
+  useEffect(() => {
+    refreshQuestions();
+  }, [refreshQuestions]);
 
   // Handle selecting a question from the bank
   const handleSelectBankQuestion = (question) => {
@@ -155,3 +155,5 @@ export default function QuestionSelector({ level, askedQuestions, targetPlayerNa
     </div>
   );
 }
+
+export default memo(QuestionSelector);

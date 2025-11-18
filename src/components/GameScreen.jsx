@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, memo } from 'react';
 import QuestionCard from './QuestionCard';
 import QuestionSelector from './QuestionSelector';
 import { GAME_CONFIG } from '../config';
@@ -11,7 +11,7 @@ import { supabase } from '../hooks/useGameState';
  * @param {Object} props.gameState - Current game state
  * @param {string} props.playerId - Current player's ID
  */
-export default function GameScreen({ gameState, playerId }) {
+function GameScreen({ gameState, playerId }) {
 
   // Get asker and answerer from circular player order
   const playerOrder = gameState.playerOrder || [];
@@ -25,10 +25,10 @@ export default function GameScreen({ gameState, playerId }) {
   const isAnswerer = answererPlayerId === playerId;
 
   // Memoize askedQuestions to prevent unnecessary re-renders from heartbeat updates
-  // Only re-memoize when the actual content changes, not on object reference changes
+  // Only re-memoize when the actual array reference changes
   const memoizedAskedQuestions = useMemo(
     () => gameState.askedQuestions || [],
-    [JSON.stringify(gameState.askedQuestions)]
+    [gameState.askedQuestions]
   );
 
   // Handle asker selecting/writing a question
@@ -244,3 +244,5 @@ export default function GameScreen({ gameState, playerId }) {
     </div>
   );
 }
+
+export default memo(GameScreen);
