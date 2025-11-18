@@ -70,6 +70,8 @@ DECLARE
   current_player RECORD;
   updated_state RECORD;
   asked_questions_array JSONB;
+  player_count INTEGER;
+  next_player_index INTEGER;
 BEGIN
   -- Get current game state
   SELECT * INTO current_state FROM game_state WHERE room_code = room_code_param;
@@ -94,11 +96,28 @@ BEGIN
     asked_questions_array := asked_questions_array || jsonb_build_array(current_question_param);
   END IF;
 
-  -- Update game state (trigger will handle turn logic)
+  -- Calculate next player index (select random player different from current)
+  SELECT COUNT(*) INTO player_count FROM game_players WHERE room_code = room_code_param;
+
+  IF player_count > 1 THEN
+    -- Keep generating random index until we get one different from current
+    LOOP
+      next_player_index := floor(random() * player_count)::INTEGER;
+      EXIT WHEN next_player_index != current_state.current_player_index;
+    END LOOP;
+  ELSE
+    -- Only one player, stay on same player
+    next_player_index := current_state.current_player_index;
+  END IF;
+
+  -- Update game state (trigger will handle level transitions)
+  -- Explicitly update current_player_index and current_question
   UPDATE game_state
   SET
     question_count = question_count + 1,
     asked_questions = asked_questions_array,
+    current_player_index = next_player_index,
+    current_question = NULL,
     updated_at = NOW()
   WHERE room_code = room_code_param
   RETURNING * INTO updated_state;
