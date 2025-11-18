@@ -67,7 +67,6 @@ CREATE OR REPLACE FUNCTION advance_turn(
 RETURNS JSONB AS $$
 DECLARE
   current_state RECORD;
-  current_players RECORD[];
   current_player RECORD;
   updated_state RECORD;
   asked_questions_array JSONB;
@@ -78,11 +77,6 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', FALSE, 'error', 'Game state not found');
   END IF;
-
-  -- Get all players
-  SELECT array_agg(row_to_json(p.*) ORDER BY joined_at) INTO current_players
-  FROM game_players p
-  WHERE p.room_code = room_code_param;
 
   -- Verify requester is current player
   SELECT * INTO current_player FROM game_players
