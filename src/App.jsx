@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Lobby from './components/Lobby';
 import GameScreen from './components/GameScreen';
 import { useGameState, supabase } from './hooks/useGameState';
@@ -24,7 +24,7 @@ function App() {
   // Use Postgres Realtime hook
   const { gameState, isConnected, error } = useGameState(roomCode, playerId);
 
-  const handleCreateRoom = async (e) => {
+  const handleCreateRoom = useCallback(async (e) => {
     e.preventDefault();
     if (!creatorName.trim()) return;
 
@@ -50,12 +50,14 @@ function App() {
         throw new Error(data?.error || 'Failed to create room');
       }
     } catch (error) {
-      console.error('Failed to create room:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to create room:', error);
+      }
       alert(`Failed to create room: ${error.message}`);
     }
-  };
+  }, [creatorName, playerId]);
 
-  const handleJoinRoom = (e) => {
+  const handleJoinRoom = useCallback((e) => {
     e.preventDefault();
     const normalizedCode = joinCode.trim().toUpperCase();
     if (normalizedCode.length !== 4) {
@@ -64,7 +66,14 @@ function App() {
     }
     // Normalize to uppercase once here
     setRoomCode(normalizedCode);
-  };
+  }, [joinCode]);
+
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleShowCreateForm = useCallback(() => setIsCreating(true), []);
+  const handleShowJoinForm = useCallback(() => setIsJoining(true), []);
+  const handleBackFromCreate = useCallback(() => setIsCreating(false), []);
+  const handleBackFromJoin = useCallback(() => setIsJoining(false), []);
+  const handleRetry = useCallback(() => window.location.reload(), []);
 
   // Landing page - Create or Join room
   if (!roomCode) {
@@ -79,13 +88,13 @@ function App() {
           {!isJoining && !isCreating ? (
             <div className="space-y-4">
               <button
-                onClick={() => setIsCreating(true)}
+                onClick={handleShowCreateForm}
                 className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition transform hover:scale-105"
               >
                 Create New Game
               </button>
               <button
-                onClick={() => setIsJoining(true)}
+                onClick={handleShowJoinForm}
                 className="w-full bg-gray-200 text-gray-800 py-4 rounded-xl font-semibold text-lg hover:bg-gray-300 transition"
               >
                 Join Existing Game
@@ -115,7 +124,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsCreating(false)}
+                onClick={handleBackFromCreate}
                 className="w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
               >
                 Back
@@ -145,7 +154,7 @@ function App() {
               </button>
               <button
                 type="button"
-                onClick={() => setIsJoining(false)}
+                onClick={handleBackFromJoin}
                 className="w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
               >
                 Back
@@ -183,7 +192,7 @@ function App() {
             <li>Restarted the dev server</li>
           </ol>
           <button
-            onClick={() => window.location.reload()}
+            onClick={handleRetry}
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
           >
             Retry

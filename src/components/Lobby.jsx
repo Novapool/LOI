@@ -1,4 +1,4 @@
-import { useState, memo } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
 
@@ -19,7 +19,7 @@ function Lobby({ gameState, playerId }) {
   // Derive host status from hostId in gameState
   const isHost = playerId === gameState.hostId;
 
-  const handleJoinGame = async (e) => {
+  const handleJoinGame = useCallback(async (e) => {
     e.preventDefault();
     if (!playerName.trim()) return;
 
@@ -40,12 +40,14 @@ function Lobby({ gameState, playerId }) {
 
       setPlayerName('');
     } catch (error) {
-      console.error('Failed to join room:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to join room:', error);
+      }
       alert(error.message || 'Failed to join room');
     }
-  };
+  }, [playerName, gameState.roomCode, playerId]);
 
-  const handleStartGame = async () => {
+  const handleStartGame = useCallback(async () => {
     if (gameState.players.length < GAME_CONFIG.MIN_PLAYERS) {
       alert(`Need at least ${GAME_CONFIG.MIN_PLAYERS} players to start!`);
       return;
@@ -64,12 +66,16 @@ function Lobby({ gameState, playerId }) {
       }
 
       // Game state will update automatically via Realtime
-      console.log('Game started successfully');
+      if (import.meta.env.DEV) {
+        console.log('Game started successfully');
+      }
     } catch (error) {
-      console.error('Failed to start game:', error);
+      if (import.meta.env.DEV) {
+        console.error('Failed to start game:', error);
+      }
       alert(error.message || 'Failed to start game');
     }
-  };
+  }, [gameState.players.length, gameState.roomCode, playerId]);
 
   const canStart = isHost && gameState.players.length >= GAME_CONFIG.MIN_PLAYERS;
 

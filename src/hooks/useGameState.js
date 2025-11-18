@@ -67,7 +67,9 @@ export function useGameState(roomCode, playerId) {
         if (roomError.code === 'PGRST116') {
           setError('Room not found');
         } else {
-          console.error('Error fetching room:', roomError);
+          if (import.meta.env.DEV) {
+            console.error('Error fetching room:', roomError);
+          }
           setError('Failed to fetch room data');
         }
         return;
@@ -80,7 +82,7 @@ export function useGameState(roomCode, playerId) {
         .eq('room_code', roomCode)
         .order('joined_at', { ascending: true });
 
-      if (playersError) {
+      if (playersError && import.meta.env.DEV) {
         console.error('Error fetching players:', playersError);
       }
 
@@ -122,7 +124,9 @@ export function useGameState(roomCode, playerId) {
       setError(null);
 
     } catch (err) {
-      console.error('Error fetching game state:', err);
+      if (import.meta.env.DEV) {
+        console.error('Error fetching game state:', err);
+      }
       setError('Failed to load game state');
     }
   }, [roomCode]);
@@ -151,7 +155,9 @@ export function useGameState(roomCode, playerId) {
           filter: `room_code=eq.${roomCode}`
         },
         (payload) => {
-          console.log('Room updated:', payload);
+          if (import.meta.env.DEV) {
+            console.log('Room updated:', payload);
+          }
 
           if (payload.eventType === 'DELETE') {
             setError('Room was deleted');
@@ -177,7 +183,9 @@ export function useGameState(roomCode, playerId) {
           filter: `room_code=eq.${roomCode}`
         },
         async (payload) => {
-          console.log('Players updated:', payload);
+          if (import.meta.env.DEV) {
+            console.log('Players updated:', payload);
+          }
           
           // For DELETE events, refetch to get current player list
           if (payload.eventType === 'DELETE') {
@@ -232,7 +240,9 @@ export function useGameState(roomCode, playerId) {
           filter: `room_code=eq.${roomCode}`
         },
         (payload) => {
-          console.log('Game state updated:', payload);
+          if (import.meta.env.DEV) {
+            console.log('Game state updated:', payload);
+          }
 
           const newData = payload.new;
           setGameState(prev => ({
@@ -250,7 +260,9 @@ export function useGameState(roomCode, playerId) {
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           setIsConnected(true);
-          console.log('Connected to Realtime');
+          if (import.meta.env.DEV) {
+            console.log('Connected to Realtime');
+          }
         } else if (status === 'CHANNEL_ERROR') {
           setError('Failed to connect to real-time updates');
           setIsConnected(false);
@@ -285,11 +297,11 @@ export function useGameState(roomCode, playerId) {
       }
     };
 
-    // Send initial heartbeat
+    // Send initial heartbeat (catch errors silently in production)
     updateHeartbeat();
 
-    // Import GAME_CONFIG for heartbeat interval (default 30s for better performance)
-    const heartbeatInterval = 30000; // 30 seconds
+    // Use 30 second interval for better performance (reduced from 10s)
+    const heartbeatInterval = 30000;
     const interval = setInterval(updateHeartbeat, heartbeatInterval);
 
     return () => {
