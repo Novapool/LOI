@@ -7,7 +7,7 @@ export const GAME_CONFIG = {
   QUESTIONS_PER_LEVEL: 3,
 
   // Minimum and maximum number of players
-  MIN_PLAYERS: 3,
+  MIN_PLAYERS: 2,
   MAX_PLAYERS: 10,
 
   // Game status constants
