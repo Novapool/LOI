@@ -135,6 +135,17 @@ function Lobby({ gameState, playerId }) {
               ))}
             </div>
 
+            {/* Questions Per Level Indicator */}
+            <div className="mt-4 bg-purple-50 border border-purple-200 rounded-xl p-3">
+              <p className="text-xs text-purple-900 text-center">
+                <span className="font-semibold">Game Format:</span> Each player answers 1 question per level
+                <br />
+                <span className="text-purple-700">
+                  ({gameState.players.length} {gameState.players.length === 1 ? 'player' : 'players'} = {gameState.players.length} questions per level)
+                </span>
+              </p>
+            </div>
+
             {/* Start Game Button (Host Only) */}
             {isHost && (
               <button
