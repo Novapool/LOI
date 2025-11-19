@@ -69,33 +69,33 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
     <div className="w-full max-w-3xl mx-auto">
       {/* Level Indicator */}
       <div className="text-center mb-6">
-        <div className={`inline-block ${levelColor} text-white px-6 py-2 rounded-full font-semibold text-sm`}>
-          Level {level}: {levelName}
+        <div className={`inline-block ${levelColor} text-white px-6 py-2 border-4 border-gray-900 rounded-lg font-pixel text-lg`}>
+          LEVEL {level}: {levelName}
         </div>
       </div>
 
       {/* Header */}
-      <div className="bg-white rounded-3xl shadow-2xl p-8 mb-6">
-        <h2 className="text-2xl font-bold text-gray-800 text-center mb-2">
-          You're asking <span className={`${levelColor.replace('bg-', 'text-')}`}>{targetPlayerName}</span> a question
+      <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-8 mb-6">
+        <h2 className="text-3xl font-pixel font-bold text-gray-800 text-center mb-3">
+          YOU'RE ASKING <span className={`${levelColor.replace('bg-', 'text-')}`}>{targetPlayerName}</span> A QUESTION
         </h2>
-        <p className="text-gray-600 text-center">
-          Select a question from the options below or write your own
+        <p className="text-xl font-pixel text-gray-700 text-center leading-relaxed">
+          SELECT A QUESTION FROM THE OPTIONS BELOW OR WRITE YOUR OWN
         </p>
       </div>
 
       {/* Question Options from Bank */}
-      <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6">
+      <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-6 mb-6">
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-800">Choose a question:</h3>
+          <h3 className="text-2xl font-pixel text-gray-800">CHOOSE A QUESTION:</h3>
           <button
             onClick={refreshQuestions}
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
+            className="font-pixel text-lg text-warmAccent hover:text-orange-700 flex items-center gap-2 border-2 border-warmAccent px-3 py-1 rounded hover:bg-warmAccent hover:text-white active:translate-y-1"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            Refresh
+            REFRESH
           </button>
         </div>
 
@@ -104,36 +104,36 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
             <button
               key={index}
               onClick={() => handleSelectBankQuestion(question)}
-              className={`w-full text-left p-4 rounded-xl transition-all border-2 ${
+              className={`w-full text-left p-4 rounded-lg border-4 font-pixel text-lg ${
                 selectedQuestion === question
-                  ? `${levelColor} border-transparent text-white shadow-lg scale-105`
-                  : 'bg-gray-50 border-gray-200 text-gray-800 hover:border-gray-300 hover:shadow-md'
+                  ? `${levelColor} border-gray-900 text-white`
+                  : 'bg-white border-amber-300 text-gray-800 hover:border-warmAccent active:translate-y-1'
               }`}
             >
-              <p className="text-base font-medium">{question}</p>
+              <p>{question}</p>
             </button>
           ))}
         </div>
       </div>
 
       {/* Custom Question Input */}
-      <div className="bg-white rounded-3xl shadow-2xl p-6 mb-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Or write your own:</h3>
+      <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-6 mb-6">
+        <h3 className="text-2xl font-pixel text-gray-800 mb-4">OR WRITE YOUR OWN:</h3>
         <textarea
           value={customQuestion}
           onChange={handleCustomQuestionChange}
           placeholder="Type your custom question here..."
-          className={`w-full p-4 border-2 rounded-xl resize-none focus:outline-none transition-all ${
+          className={`w-full p-4 border-4 rounded-lg resize-none focus:outline-none font-pixel text-lg bg-white ${
             selectionMode === 'custom'
-              ? `${levelColor.replace('bg-', 'border-')} shadow-lg`
-              : 'border-gray-200 focus:border-gray-300'
+              ? `${levelColor.replace('bg-', 'border-')}`
+              : 'border-gray-400 focus:border-warmAccent'
           }`}
           rows={3}
           maxLength={500}
         />
         {customQuestion.trim().length > 0 && customQuestion.trim().length < 10 && (
-          <p className="text-sm text-red-500 mt-2">
-            Question must be at least 10 characters (currently {customQuestion.trim().length})
+          <p className="font-pixel text-lg text-red-600 mt-2">
+            QUESTION MUST BE AT LEAST 10 CHARACTERS (CURRENTLY {customQuestion.trim().length})
           </p>
         )}
       </div>
@@ -143,13 +143,13 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
         <button
           onClick={handleAskQuestion}
           disabled={!canAskQuestion}
-          className={`px-8 py-4 rounded-full font-bold text-lg shadow-lg transition-all ${
+          className={`px-8 py-4 rounded-lg font-pixel text-2xl border-4 ${
             canAskQuestion
-              ? `${levelColor} text-white hover:scale-105 hover:shadow-xl`
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              ? `${levelColor} text-white border-gray-900 hover:opacity-90 active:translate-y-1`
+              : 'bg-gray-300 text-gray-500 border-gray-400 cursor-not-allowed'
           }`}
         >
-          Ask Question
+          ASK QUESTION
         </button>
       </div>
     </div>

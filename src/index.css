@@ -4,28 +4,79 @@
 
 @layer base {
   body {
-    @apply antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-      sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    font-family: 'VT323', monospace;
+    background-color: #0F172A;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
   }
 }
 
 @layer utilities {
+  /* Pixel-perfect borders */
+  .pixel-border {
+    box-shadow:
+      0 0 0 2px currentColor,
+      0 0 0 4px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Night sky with stars background */
+  .stars-bg {
+    background-color: #0F172A;
+    background-image:
+      radial-gradient(2px 2px at 20px 30px, white, transparent),
+      radial-gradient(2px 2px at 60px 70px, white, transparent),
+      radial-gradient(1px 1px at 50px 50px, white, transparent),
+      radial-gradient(1px 1px at 130px 80px, white, transparent),
+      radial-gradient(2px 2px at 90px 10px, white, transparent),
+      radial-gradient(1px 1px at 40px 120px, white, transparent),
+      radial-gradient(2px 2px at 150px 40px, white, transparent),
+      radial-gradient(1px 1px at 110px 110px, white, transparent),
+      radial-gradient(1px 1px at 175px 85px, white, transparent),
+      radial-gradient(2px 2px at 10px 95px, white, transparent);
+    background-repeat: repeat;
+    background-size: 200px 150px;
+  }
+
+  /* Frame-based fade in (2 steps instead of smooth) */
   .animate-fadeIn {
-    animation: fadeIn 0.5s ease-in-out;
+    animation: fadeIn 0.3s steps(2);
   }
 
   @keyframes fadeIn {
     from {
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(4px);
     }
     to {
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  /* Campfire flicker animation (3 frames) */
+  .campfire-flicker {
+    animation: flicker 1.5s steps(3) infinite;
+  }
+
+  @keyframes flicker {
+    0%, 100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    33% {
+      opacity: 0.85;
+      transform: scale(0.98);
+    }
+    66% {
+      opacity: 0.95;
+      transform: scale(1.02);
+    }
+  }
+
+  /* Pixel-style button press effect */
+  .pixel-button-active {
+    transform: translateY(2px);
+    box-shadow: none;
   }
 }

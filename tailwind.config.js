@@ -7,11 +7,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        level5: '#8B5CF6', // Purple - Most intimate
-        level4: '#3B82F6', // Blue
-        level3: '#10B981', // Green
-        level2: '#F59E0B', // Orange
-        level1: '#EF4444', // Red - Least intimate
+        // Campfire-themed intimacy levels
+        level5: '#8B2500', // Deep Ember - Most intimate (glowing coals)
+        level4: '#D84000', // Fire Orange - Deep emotions
+        level3: '#F59E0B', // Golden Flame - Peak vulnerability
+        level2: '#FCD34D', // Light Flame - Warming up
+        level1: '#9CA3AF', // Ash Gray - Surface level
+
+        // Campfire palette
+        nightSky: '#0F172A',
+        woodBrown: '#92400E',
+        warmAccent: '#EA580C',
+        lightAccent: '#FB923C',
+      },
+      fontFamily: {
+        pixel: ['VT323', 'monospace'],
       },
     },
   },

@@ -92,27 +92,27 @@ function GameScreen({ gameState, playerId }) {
 
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-900 via-teal-900 to-blue-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-800 mb-4">Game Over!</h1>
-          <p className="text-lg text-gray-600 mb-8">
-            You've completed the Intimacy Ladder journey from deep vulnerability to casual conversation.
+      <div className="min-h-screen stars-bg flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-amber-50 border-4 border-woodBrown rounded-lg p-8 text-center">
+          <h1 className="text-5xl font-pixel font-bold text-gray-800 mb-6">GAME OVER!</h1>
+          <p className="text-xl font-pixel text-gray-700 mb-8 leading-relaxed">
+            YOU'VE COMPLETED THE INTIMACY LADDER JOURNEY FROM DEEP VULNERABILITY TO CASUAL CONVERSATION.
           </p>
-          <p className="text-gray-700 mb-4">
-            Thanks for playing with:
+          <p className="text-2xl font-pixel text-gray-800 mb-4">
+            THANKS FOR PLAYING WITH:
           </p>
           <div className="space-y-2 mb-8">
             {gameState.players.map((player) => (
-              <div key={player.id} className="bg-gray-100 rounded-xl p-3 text-gray-800 font-medium">
+              <div key={player.id} className="bg-amber-100 border-2 border-amber-300 rounded-lg p-3 text-gray-800 font-pixel text-xl">
                 {player.name}
               </div>
             ))}
           </div>
           <button
             onClick={() => window.location.reload()}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
+            className="w-full bg-warmAccent text-white border-4 border-woodBrown py-4 rounded-lg font-pixel text-2xl hover:bg-orange-600 active:translate-y-1"
           >
-            Play Again
+            PLAY AGAIN
           </button>
         </div>
       </div>
@@ -120,17 +120,17 @@ function GameScreen({ gameState, playerId }) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 p-4 md:p-8">
+    <div className="min-h-screen stars-bg p-4 md:p-8">
       {/* Header */}
       <div className="max-w-4xl mx-auto mb-8">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 flex justify-between items-center">
-          <div className="text-white">
-            <p className="text-sm opacity-80">Room Code</p>
-            <p className="text-2xl font-bold tracking-wider">{gameState.roomCode}</p>
+        <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-4 flex justify-between items-center">
+          <div className="text-gray-800">
+            <p className="text-lg font-pixel">ROOM CODE</p>
+            <p className="text-3xl font-pixel font-bold tracking-wider">{gameState.roomCode}</p>
           </div>
-          <div className="text-right text-white">
-            <p className="text-sm opacity-80">Question</p>
-            <p className="text-2xl font-bold">
+          <div className="text-right text-gray-800">
+            <p className="text-lg font-pixel">QUESTION</p>
+            <p className="text-3xl font-pixel font-bold">
               {gameState.questionCount + 1}/{gameState.settings.questionsPerLevel || GAME_CONFIG.QUESTIONS_PER_LEVEL}
             </p>
           </div>
@@ -139,26 +139,26 @@ function GameScreen({ gameState, playerId }) {
 
       {/* Asker/Answerer Indicator */}
       <div className="max-w-4xl mx-auto mb-8">
-        <div className="bg-white/20 backdrop-blur-md rounded-2xl p-6 text-center">
+        <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-6 text-center">
           {isAsker && !gameState.currentQuestion ? (
             <div>
-              <p className="text-white/80 text-sm mb-2">You are asking</p>
-              <p className="text-white text-3xl font-bold">{answererPlayer?.name}</p>
-              <p className="text-yellow-300 text-sm mt-2 font-semibold">Select or write a question!</p>
+              <p className="text-gray-700 text-xl font-pixel mb-2">YOU ARE ASKING</p>
+              <p className="text-warmAccent text-4xl font-pixel font-bold">{answererPlayer?.name}</p>
+              <p className="text-level2 text-xl font-pixel mt-2">SELECT OR WRITE A QUESTION!</p>
             </div>
           ) : isAnswerer && gameState.currentQuestion ? (
             <div>
-              <p className="text-white/80 text-sm mb-2">{askerPlayer?.name} is asking you</p>
-              <p className="text-yellow-300 text-sm mt-2 font-semibold">It's your turn to answer!</p>
+              <p className="text-gray-700 text-xl font-pixel mb-2">{askerPlayer?.name} IS ASKING YOU</p>
+              <p className="text-level2 text-xl font-pixel mt-2">IT'S YOUR TURN TO ANSWER!</p>
             </div>
           ) : (
             <div>
-              <p className="text-white/80 text-sm mb-2">Current Turn</p>
-              <p className="text-white text-2xl font-bold">
+              <p className="text-gray-700 text-xl font-pixel mb-2">CURRENT TURN</p>
+              <p className="text-warmAccent text-3xl font-pixel font-bold">
                 {askerPlayer?.name} → {answererPlayer?.name}
               </p>
-              <p className="text-white/60 text-sm mt-2">
-                {!gameState.currentQuestion ? 'Selecting question...' : 'Answering...'}
+              <p className="text-gray-600 text-lg font-pixel mt-2">
+                {!gameState.currentQuestion ? 'SELECTING QUESTION...' : 'ANSWERING...'}
               </p>
             </div>
           )}
@@ -185,11 +185,11 @@ function GameScreen({ gameState, playerId }) {
         ) : (
           /* Waiting for asker to select question */
           <div className="w-full max-w-2xl mx-auto">
-            <div className="bg-white rounded-3xl shadow-2xl p-12 text-center">
+            <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-12 text-center">
               <div className="animate-pulse">
-                <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto mb-4"></div>
-                <p className="text-xl text-gray-600">
-                  Waiting for {askerPlayer?.name} to select a question...
+                <div className="w-16 h-16 bg-amber-200 border-4 border-amber-400 mx-auto mb-4"></div>
+                <p className="text-2xl font-pixel text-gray-700">
+                  WAITING FOR {askerPlayer?.name} TO SELECT A QUESTION...
                 </p>
               </div>
             </div>
@@ -199,8 +199,8 @@ function GameScreen({ gameState, playerId }) {
 
       {/* Player List */}
       <div className="max-w-2xl mx-auto mb-8">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6">
-          <h3 className="text-white text-lg font-semibold mb-4">Players</h3>
+        <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-6">
+          <h3 className="text-gray-800 text-2xl font-pixel mb-4">PLAYERS</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {gameState.players.map((player) => {
               const isCurrentAsker = player.id === askerPlayerId;
@@ -209,17 +209,17 @@ function GameScreen({ gameState, playerId }) {
               return (
                 <div
                   key={player.id}
-                  className={`rounded-xl p-3 text-center transition ${
+                  className={`rounded-lg p-3 text-center font-pixel border-4 ${
                     isCurrentAsker
-                      ? 'bg-blue-400 text-gray-900 font-bold border-2 border-blue-600'
+                      ? 'bg-level4 text-white font-bold border-red-900'
                       : isCurrentAnswerer
-                      ? 'bg-yellow-400 text-gray-900 font-bold border-2 border-yellow-600'
-                      : 'bg-white/20 text-white'
+                      ? 'bg-level2 text-gray-900 font-bold border-yellow-600'
+                      : 'bg-amber-100 text-gray-700 border-amber-300'
                   }`}
                 >
-                  {player.name}
-                  {isCurrentAsker && <div className="text-xs mt-1">Asking</div>}
-                  {isCurrentAnswerer && <div className="text-xs mt-1">Answering</div>}
+                  <div className="text-lg">{player.name}</div>
+                  {isCurrentAsker && <div className="text-sm mt-1">ASKING</div>}
+                  {isCurrentAnswerer && <div className="text-sm mt-1">ANSWERING</div>}
                 </div>
               );
             })}
@@ -232,15 +232,15 @@ function GameScreen({ gameState, playerId }) {
         {isAnswerer && gameState.currentQuestion ? (
           <button
             onClick={handleNextTurn}
-            className="w-full bg-green-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-green-600 transition transform hover:scale-105 shadow-lg"
+            className="w-full bg-level3 text-white border-4 border-green-800 py-4 rounded-lg font-pixel text-2xl hover:bg-yellow-500 active:translate-y-1"
           >
-            I'm Done Answering
+            I'M DONE ANSWERING
           </button>
         ) : (
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-center text-white">
+          <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-4 text-center text-gray-800 font-pixel text-xl">
             {!gameState.currentQuestion
-              ? `Waiting for ${askerPlayer?.name} to select a question...`
-              : `Waiting for ${answererPlayer?.name} to finish answering...`
+              ? `WAITING FOR ${askerPlayer?.name} TO SELECT A QUESTION...`
+              : `WAITING FOR ${answererPlayer?.name} TO FINISH ANSWERING...`
             }
           </div>
         )}
