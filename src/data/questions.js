@@ -15,23 +15,13 @@ export const QUESTIONS = {
     "What's the real reason you do what you do?",
     "What truth about yourself have you been avoiding?",
     "What would make your life feel complete?",
-    "If you were to die this evening with no opportunity to communicate with anyone, what would you most regret not having told someone?",
-    "What do you know you need to change but haven't?",
-    "If you could restart your life, what would you do differently?",
     "What makes you feel most alive?",
     "What's the most important thing no one knows about you?",
     "What part of yourself do you hide from everyone?",
     "How do you define what makes something 'right' or 'wrong'?",
     "When you're alone with your thoughts, who do you think you really are?",
     "What would you do if you knew you couldn't fail?",
-    "What part of you died that you wish you could bring back?",
-    "If a crystal ball could tell you the truth about yourself, your life, or the future, what would you want to know?",
-    "What scares you most about the future?",
-    "What do you need to let go of?",
-    "What's the hardest choice you've ever had to make?",
-    "If you knew that in one year you would die suddenly, would you change anything about the way you are now living?",
-    "What do you fear most about being truly known?",
-    "What truth are you running from?"
+    "What do you need to let go of?"
   ],
 
   4: [
@@ -56,7 +46,6 @@ export const QUESTIONS = {
     "What are you most afraid of?",
     "When do you feel most insecure?",
     "What do you wish people knew about you that they don't?",
-    "Share with your partner an embarrassing moment in your life",
     "When did you last cry in front of another person? By yourself?",
     "What makes you feel most alone?",
     "When did you feel most hurt by someone you loved?",
@@ -65,7 +54,13 @@ export const QUESTIONS = {
     "When do you feel like an imposter?",
     "What anger are you holding onto?",
     "What sadness are you carrying?",
-    "If you could erase one memory, which would it be and why?"
+    "If you were to die this evening with no opportunity to communicate with anyone, what would you most regret not having told someone?",
+    "What scares you most about the future?",
+    "What do you know you need to change but haven't?",
+    "What part of you died that you wish you could bring back?",
+    "What do you fear most about being truly known?",
+    "What truth are you running from?",
+    "Do you have a secret hunch about how you will die?"
   ],
 
   3: [
@@ -74,8 +69,6 @@ export const QUESTIONS = {
     "What's your most treasured memory?",
     "What's your most terrible memory?",
     "What belief have you completely reversed?",
-    "What do you value most in other people?",
-    "What does friendship mean to you?",
     "What roles do love and affection play in your life?",
     "How close and warm is your family? Do you feel your childhood was happier than most other people's?",
     "If you could change anything about the way you were raised, what would it be?",
@@ -94,7 +87,11 @@ export const QUESTIONS = {
     "What's the most trouble you've been in?",
     "When did you realize you'd changed?",
     "What's your proudest accomplishment?",
-    "What's the best advice you've ever received?"
+    "What's the best advice you've ever received?",
+    "Share an embarrassing moment in your life",
+    "If you could erase one memory, which would it be and why?",
+    "If you could restart your life, what would you do differently?",
+    "What's the hardest choice you've ever had to make?"
   ],
 
   2: [
@@ -128,7 +125,12 @@ export const QUESTIONS = {
     "What's your most irrational fear?",
     "What's something you're secretly competitive about?",
     "What's your controversial food opinion?",
-    "If you were able to live to the age of 90 and retain either the mind or body of a 30-year-old for the last 60 years of your life, which would you want?"
+    "If you were able to live to the age of 90 and retain either the mind or body of a 30-year-old for the last 60 years of your life, which would you want?",
+    "What do you value most in other people?",
+    "What does friendship mean to you?",
+    "If a crystal ball could tell you the truth about yourself, your life, or the future, what would you want to know?",
+    "If you knew that in one year you would die suddenly, would you change anything about the way you are now living?",
+    "For what in your life do you feel most grateful?"
   ],
 
   1: [
@@ -160,9 +162,7 @@ export const QUESTIONS = {
     "Beach or mountains?",
     "What's your favorite vacation spot?",
     "What's your favorite ice cream flavor?",
-    "What's your favorite holiday?",
-    "Do you have a secret hunch about how you will die?",
-    "For what in your life do you feel most grateful?"
+    "What's your favorite holiday?"
   ]
 };
 
