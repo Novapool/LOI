@@ -28,6 +28,7 @@ DECLARE
   answerer_player_id TEXT;
   current_level_key TEXT;
   has_used_reroll BOOLEAN;
+  random_question TEXT;
 BEGIN
   -- Get current game state
   SELECT * INTO current_state FROM game_state WHERE room_code = room_code_param;
@@ -57,7 +58,21 @@ BEGIN
     RETURN jsonb_build_object('success', FALSE, 'error', 'Reroll already used for this level');
   END IF;
 
-  -- Mark reroll as used for this level (store player ID who used it)
+  -- Fetch a random question from the question bank for the current level
+  -- Part of the gamble: can select already-asked questions
+  SELECT question_text INTO random_question
+  FROM question_bank
+  WHERE level = current_state.current_level
+    AND is_active = true
+  ORDER BY random()
+  LIMIT 1;
+
+  -- Verify we found a question
+  IF random_question IS NULL THEN
+    RETURN jsonb_build_object('success', FALSE, 'error', 'No questions available for this level');
+  END IF;
+
+  -- Mark reroll as used for this level AND set the new random question
   UPDATE game_state
   SET
     rerolls_used = jsonb_set(
@@ -66,8 +81,8 @@ BEGIN
       to_jsonb(player_id_param),
       true
     ),
-    current_question = NULL, -- Clear question so asker can select a new one
-    is_custom_question = false, -- Reset custom flag
+    current_question = random_question, -- Set random question from bank (auto-selected)
+    is_custom_question = false, -- Always false for bank questions
     updated_at = NOW()
   WHERE room_code = room_code_param;
 
@@ -75,13 +90,15 @@ BEGIN
   INSERT INTO game_events (room_code, event, payload)
   VALUES (room_code_param, 'question_rerolled', jsonb_build_object(
     'answererPlayerId', player_id_param,
-    'level', current_state.current_level
+    'level', current_state.current_level,
+    'newQuestion', random_question
   ));
 
-  -- Return success
+  -- Return success with the new question
   RETURN jsonb_build_object(
     'success', TRUE,
-    'message', 'Question rerolled successfully'
+    'message', 'Question rerolled successfully',
+    'question', random_question
   );
 EXCEPTION
   WHEN OTHERS THEN
