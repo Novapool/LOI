@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Lobby from './components/Lobby';
 import GameScreen from './components/GameScreen';
+import CampfireAnimation from './components/CampfireAnimation';
 import { useGameState, supabase } from './hooks/useGameState';
 import { GAME_CONFIG } from './config';
 
@@ -78,10 +79,15 @@ function App() {
   // Landing page - Create or Join room
   if (!roomCode) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2 text-center">Intimacy Ladder</h1>
-          <p className="text-gray-600 text-center mb-8">
+      <div className="min-h-screen stars-bg flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-amber-50 border-4 border-woodBrown rounded-lg p-8">
+          {/* Campfire decoration */}
+          <div className="flex justify-center mb-6">
+            <CampfireAnimation />
+          </div>
+
+          <h1 className="text-5xl font-pixel font-bold text-gray-800 mb-3 text-center tracking-wide">INTIMACY LADDER</h1>
+          <p className="text-xl font-pixel text-gray-700 text-center mb-8">
             A party game that flips conversation on its head
           </p>
 
@@ -89,22 +95,22 @@ function App() {
             <div className="space-y-4">
               <button
                 onClick={handleShowCreateForm}
-                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition transform hover:scale-105"
+                className="w-full bg-warmAccent text-white border-4 border-woodBrown py-4 rounded-lg font-pixel text-2xl hover:bg-orange-600 active:translate-y-1"
               >
-                Create New Game
+                CREATE NEW GAME
               </button>
               <button
                 onClick={handleShowJoinForm}
-                className="w-full bg-gray-200 text-gray-800 py-4 rounded-xl font-semibold text-lg hover:bg-gray-300 transition"
+                className="w-full bg-amber-200 text-gray-800 border-4 border-woodBrown py-4 rounded-lg font-pixel text-2xl hover:bg-amber-300 active:translate-y-1"
               >
-                Join Existing Game
+                JOIN EXISTING GAME
               </button>
             </div>
           ) : isCreating ? (
             <form onSubmit={handleCreateRoom} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Enter your name
+                <label className="block text-xl font-pixel text-gray-700 mb-2">
+                  ENTER YOUR NAME
                 </label>
                 <input
                   type="text"
@@ -112,29 +118,29 @@ function App() {
                   onChange={(e) => setCreatorName(e.target.value)}
                   placeholder="Your name"
                   maxLength={20}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-3 border-4 border-gray-400 rounded-lg font-pixel text-xl focus:border-warmAccent outline-none bg-white"
                   autoFocus
                 />
               </div>
               <button
                 type="submit"
-                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition"
+                className="w-full bg-warmAccent text-white border-4 border-woodBrown py-4 rounded-lg font-pixel text-2xl hover:bg-orange-600 active:translate-y-1"
               >
-                Create Game
+                CREATE GAME
               </button>
               <button
                 type="button"
                 onClick={handleBackFromCreate}
-                className="w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
+                className="w-full bg-amber-200 text-gray-800 border-4 border-woodBrown py-3 rounded-lg font-pixel text-xl hover:bg-amber-300 active:translate-y-1"
               >
-                Back
+                BACK
               </button>
             </form>
           ) : (
             <form onSubmit={handleJoinRoom} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Enter Room Code
+                <label className="block text-xl font-pixel text-gray-700 mb-2">
+                  ENTER ROOM CODE
                 </label>
                 <input
                   type="text"
@@ -142,30 +148,30 @@ function App() {
                   onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                   placeholder="ABCD"
                   maxLength={4}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-center text-2xl font-bold tracking-wider focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-3 border-4 border-gray-400 rounded-lg text-center text-3xl font-pixel tracking-wider focus:border-warmAccent outline-none bg-white"
                   autoFocus
                 />
               </div>
               <button
                 type="submit"
-                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-indigo-700 transition"
+                className="w-full bg-warmAccent text-white border-4 border-woodBrown py-4 rounded-lg font-pixel text-2xl hover:bg-orange-600 active:translate-y-1"
               >
-                Join Game
+                JOIN GAME
               </button>
               <button
                 type="button"
                 onClick={handleBackFromJoin}
-                className="w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-semibold hover:bg-gray-300 transition"
+                className="w-full bg-amber-200 text-gray-800 border-4 border-woodBrown py-3 rounded-lg font-pixel text-xl hover:bg-amber-300 active:translate-y-1"
               >
-                Back
+                BACK
               </button>
             </form>
           )}
 
           {/* Info */}
-          <div className="mt-8 bg-indigo-50 rounded-xl p-4 text-sm text-gray-700">
-            <p className="font-semibold mb-2">What is Intimacy Ladder?</p>
-            <p className="text-xs">
+          <div className="mt-8 bg-amber-100 border-4 border-amber-300 rounded-lg p-4 font-pixel text-gray-800">
+            <p className="text-xl mb-2">WHAT IS INTIMACY LADDER?</p>
+            <p className="text-lg leading-relaxed">
               A multiplayer game where you start with deep, vulnerable questions and work your way down
               to small talk. Perfect for parties, dates, or getting to know people on a deeper level.
             </p>
@@ -178,14 +184,14 @@ function App() {
   // Show connection error if Supabase is not configured
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 via-pink-900 to-purple-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Connection Error</h1>
-          <p className="text-gray-700 mb-4">{error}</p>
-          <p className="text-sm text-gray-600 mb-4">
-            Please make sure you have:
+      <div className="min-h-screen stars-bg flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-red-100 border-4 border-red-600 rounded-lg p-8">
+          <h1 className="text-3xl font-pixel font-bold text-red-700 mb-4">CONNECTION ERROR</h1>
+          <p className="text-xl font-pixel text-gray-800 mb-4">{error}</p>
+          <p className="text-lg font-pixel text-gray-700 mb-4">
+            PLEASE MAKE SURE YOU HAVE:
           </p>
-          <ol className="list-decimal list-inside text-sm text-gray-600 space-y-2 mb-6">
+          <ol className="list-decimal list-inside text-lg font-pixel text-gray-700 space-y-2 mb-6 ml-4">
             <li>Created a Supabase project</li>
             <li>Copied .env.example to .env.local</li>
             <li>Added your Supabase URL and anon key to .env.local</li>
@@ -193,9 +199,9 @@ function App() {
           </ol>
           <button
             onClick={handleRetry}
-            className="w-full bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition"
+            className="w-full bg-red-600 text-white border-4 border-red-800 py-3 rounded-lg font-pixel text-2xl hover:bg-red-700 active:translate-y-1"
           >
-            Retry
+            RETRY
           </button>
         </div>
       </div>
@@ -205,10 +211,13 @@ function App() {
   // Show loading state while connecting
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-white border-t-transparent mx-auto mb-4"></div>
-          <p className="text-xl font-semibold">Connecting to room {roomCode}...</p>
+      <div className="min-h-screen stars-bg flex items-center justify-center">
+        <div className="text-center">
+          <div className="flex justify-center mb-6">
+            <CampfireAnimation />
+          </div>
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-warmAccent border-t-transparent mx-auto mb-4"></div>
+          <p className="text-2xl font-pixel text-amber-200">CONNECTING TO ROOM {roomCode}...</p>
         </div>
       </div>
     );

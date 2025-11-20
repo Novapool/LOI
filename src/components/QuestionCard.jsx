@@ -17,22 +17,22 @@ function QuestionCard({ question, level, isCustomQuestion = false }) {
     <div className="w-full max-w-2xl mx-auto">
       {/* Level Indicator */}
       <div className="text-center mb-6 flex justify-center items-center gap-3">
-        <div className={`inline-block ${levelColor} text-white px-6 py-2 rounded-full font-semibold text-sm`}>
-          Level {level}: {levelName}
+        <div className={`inline-block ${levelColor} text-white px-6 py-2 border-4 border-gray-900 rounded-lg font-pixel text-lg`}>
+          LEVEL {level}: {levelName}
         </div>
         {isCustomQuestion && (
-          <div className="inline-flex items-center gap-1 bg-purple-500 text-white px-4 py-2 rounded-full font-semibold text-sm">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="inline-flex items-center gap-2 bg-purple-600 text-white px-4 py-2 border-4 border-purple-900 rounded-lg font-pixel text-lg">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
             </svg>
-            Custom
+            CUSTOM
           </div>
         )}
       </div>
 
       {/* Question Card */}
-      <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 animate-fadeIn">
-        <p className="text-2xl md:text-3xl font-bold text-gray-800 text-center leading-relaxed">
+      <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-8 md:p-12 animate-fadeIn">
+        <p className="text-2xl md:text-3xl font-pixel font-bold text-gray-800 text-center leading-relaxed">
           {question}
         </p>
       </div>
@@ -42,12 +42,12 @@ function QuestionCard({ question, level, isCustomQuestion = false }) {
         {[5, 4, 3, 2, 1].map((lvl) => (
           <div
             key={lvl}
-            className={`h-2 w-12 rounded-full transition-all ${
+            className={`h-3 w-12 border-2 border-gray-800 ${
               lvl === level
                 ? GAME_CONFIG.LEVEL_COLORS[lvl]
                 : lvl > level
                 ? 'bg-gray-300'
-                : 'bg-gray-400'
+                : 'bg-gray-500'
             }`}
           />
         ))}

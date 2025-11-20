@@ -1,6 +1,7 @@
 import { useState, memo, useCallback } from 'react';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
+import CampfireAnimation from './CampfireAnimation';
 
 /**
  * Lobby component - Pre-game room with player list
@@ -80,22 +81,27 @@ function Lobby({ gameState, playerId }) {
   const canStart = isHost && gameState.players.length >= GAME_CONFIG.MIN_PLAYERS;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-indigo-900 to-blue-900 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-3xl shadow-2xl p-8">
+    <div className="min-h-screen stars-bg flex items-center justify-center p-4">
+      <div className="max-w-md w-full bg-amber-50 border-4 border-woodBrown rounded-lg p-8">
+        {/* Campfire decoration */}
+        <div className="flex justify-center mb-6">
+          <CampfireAnimation />
+        </div>
+
         {/* Room Code Display */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Intimacy Ladder</h1>
-          <div className="bg-gray-100 rounded-xl p-4">
-            <p className="text-sm text-gray-600 mb-1">Room Code</p>
-            <p className="text-5xl font-black text-indigo-600 tracking-wider">{gameState.roomCode}</p>
+          <h1 className="text-4xl font-pixel font-bold text-gray-800 mb-4 tracking-wide">INTIMACY LADDER</h1>
+          <div className="bg-amber-100 border-4 border-amber-300 rounded-lg p-4">
+            <p className="text-lg font-pixel text-gray-700 mb-1">ROOM CODE</p>
+            <p className="text-6xl font-pixel text-warmAccent tracking-wider">{gameState.roomCode}</p>
           </div>
         </div>
 
         {/* Join Form or Player List */}
         {!hasJoined ? (
           <form onSubmit={handleJoinGame} className="mb-8">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Enter your name
+            <label className="block text-xl font-pixel text-gray-700 mb-2">
+              ENTER YOUR NAME
             </label>
             <input
               type="text"
@@ -103,36 +109,47 @@ function Lobby({ gameState, playerId }) {
               onChange={(e) => setPlayerName(e.target.value)}
               placeholder="Your name"
               maxLength={20}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition"
+              className="w-full px-4 py-3 border-4 border-gray-400 rounded-lg font-pixel text-xl focus:border-warmAccent outline-none bg-white"
               autoFocus
             />
             <button
               type="submit"
-              className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition transform hover:scale-105"
+              className="w-full mt-4 bg-warmAccent text-white border-4 border-woodBrown py-3 rounded-lg font-pixel text-2xl hover:bg-orange-600 active:translate-y-1"
             >
-              Join Game
+              JOIN GAME
             </button>
           </form>
         ) : (
           <div className="mb-8">
             {/* Player List */}
-            <h2 className="text-lg font-semibold text-gray-800 mb-4">
-              Players ({gameState.players.length}/{GAME_CONFIG.MAX_PLAYERS})
+            <h2 className="text-2xl font-pixel text-gray-800 mb-4">
+              PLAYERS ({gameState.players.length}/{GAME_CONFIG.MAX_PLAYERS})
             </h2>
             <div className="space-y-2">
               {gameState.players.map((player) => (
                 <div
                   key={player.id}
-                  className="bg-gray-50 rounded-xl p-3 flex items-center justify-between"
+                  className="bg-amber-100 border-2 border-amber-300 rounded-lg p-3 flex items-center justify-between"
                 >
-                  <span className="font-medium text-gray-800">{player.name}</span>
+                  <span className="font-pixel text-xl text-gray-800">{player.name}</span>
                   {player.id === gameState.hostId && (
-                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">
-                      Host
+                    <span className="font-pixel text-sm bg-warmAccent text-white px-3 py-1 rounded border-2 border-woodBrown">
+                      HOST
                     </span>
                   )}
                 </div>
               ))}
+            </div>
+
+            {/* Questions Per Level Indicator */}
+            <div className="mt-4 bg-amber-100 border-4 border-amber-300 rounded-lg p-3">
+              <p className="text-lg font-pixel text-gray-800 text-center leading-relaxed">
+                GAME FORMAT: EACH PLAYER ANSWERS 1 QUESTION PER LEVEL
+                <br />
+                <span className="text-warmAccent">
+                  ({gameState.players.length} {gameState.players.length === 1 ? 'PLAYER' : 'PLAYERS'} = {gameState.players.length} QUESTIONS PER LEVEL)
+                </span>
+              </p>
             </div>
 
             {/* Start Game Button (Host Only) */}
@@ -140,35 +157,35 @@ function Lobby({ gameState, playerId }) {
               <button
                 onClick={handleStartGame}
                 disabled={!canStart}
-                className={`w-full mt-6 py-3 rounded-xl font-semibold transition transform ${
+                className={`w-full mt-6 py-4 rounded-lg font-pixel text-2xl border-4 ${
                   canStart
-                    ? 'bg-green-600 text-white hover:bg-green-700 hover:scale-105'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    ? 'bg-level3 text-white border-green-800 hover:bg-yellow-500 active:translate-y-1'
+                    : 'bg-gray-300 text-gray-500 border-gray-400 cursor-not-allowed'
                 }`}
               >
                 {canStart
-                  ? 'Start Game'
-                  : `Need ${GAME_CONFIG.MIN_PLAYERS - gameState.players.length} more player(s)`}
+                  ? 'START GAME'
+                  : `NEED ${GAME_CONFIG.MIN_PLAYERS - gameState.players.length} MORE PLAYER(S)`}
               </button>
             )}
 
             {/* Waiting Message (Non-Host) */}
             {!isHost && (
-              <p className="text-center text-gray-600 mt-6 text-sm">
-                Waiting for host to start the game...
+              <p className="text-center text-gray-700 mt-6 text-xl font-pixel">
+                WAITING FOR HOST TO START THE GAME...
               </p>
             )}
           </div>
         )}
 
         {/* Game Info */}
-        <div className="bg-indigo-50 rounded-xl p-4 text-sm text-gray-700">
-          <p className="font-semibold mb-2">How to Play:</p>
-          <ul className="space-y-1 text-xs">
-            <li>• Start with the most intimate questions (Level 5)</li>
-            <li>• Take turns answering questions</li>
-            <li>• Work your way down to small talk (Level 1)</li>
-            <li>• Be honest, be vulnerable, have fun!</li>
+        <div className="bg-amber-100 border-4 border-amber-300 rounded-lg p-4 font-pixel text-gray-800">
+          <p className="text-xl mb-3">HOW TO PLAY:</p>
+          <ul className="space-y-2 text-lg leading-relaxed">
+            <li>- START WITH THE MOST INTIMATE QUESTIONS (LEVEL 5)</li>
+            <li>- TAKE TURNS ANSWERING QUESTIONS</li>
+            <li>- WORK YOUR WAY DOWN TO SMALL TALK (LEVEL 1)</li>
+            <li>- BE HONEST, BE VULNERABLE, HAVE FUN!</li>
           </ul>
         </div>
       </div>
