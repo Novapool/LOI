@@ -8,10 +8,16 @@ import { GAME_CONFIG } from '../config';
  * @param {string} props.question - The question to display
  * @param {number} props.level - The current level (1-5)
  * @param {boolean} props.isCustomQuestion - Whether this is a custom question
+ * @param {boolean} props.isAnswerer - Whether current player is the answerer
+ * @param {Object} props.rerollsUsed - Object tracking reroll usage per level
+ * @param {function} props.onReroll - Callback when reroll button is clicked
  */
-function QuestionCard({ question, level, isCustomQuestion = false }) {
+function QuestionCard({ question, level, isCustomQuestion = false, isAnswerer = false, rerollsUsed = {}, onReroll }) {
   const levelColor = GAME_CONFIG.LEVEL_COLORS[level];
   const levelName = GAME_CONFIG.LEVEL_NAMES[level];
+  
+  // Check if reroll has been used for current level
+  const hasUsedReroll = rerollsUsed[level.toString()] !== undefined;
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -36,6 +42,33 @@ function QuestionCard({ question, level, isCustomQuestion = false }) {
           {question}
         </p>
       </div>
+
+      {/* Reroll Button - Only shown to answerer if they haven't used it this level */}
+      {isAnswerer && !hasUsedReroll && onReroll && (
+        <div className="mt-6 text-center">
+          <button
+            onClick={onReroll}
+            className="bg-purple-600 text-white border-4 border-purple-900 px-6 py-3 rounded-lg font-pixel text-xl hover:bg-purple-700 active:translate-y-1 flex items-center gap-2 mx-auto"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            REROLL QUESTION (1 PER LEVEL)
+          </button>
+          <p className="text-gray-600 font-pixel text-sm mt-2">
+            DON'T LIKE THIS QUESTION? REROLL FOR A NEW ONE!
+          </p>
+        </div>
+      )}
+
+      {/* Reroll Used Indicator */}
+      {isAnswerer && hasUsedReroll && (
+        <div className="mt-6 text-center">
+          <p className="text-gray-500 font-pixel text-lg">
+            REROLL ALREADY USED FOR THIS LEVEL
+          </p>
+        </div>
+      )}
 
       {/* Level Progress Indicator */}
       <div className="mt-6 flex justify-center items-center space-x-2">

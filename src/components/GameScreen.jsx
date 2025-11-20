@@ -90,6 +90,34 @@ function GameScreen({ gameState, playerId }) {
     }
   }, [gameState.roomCode, playerId, gameState.currentQuestion]);
 
+  // Handle answerer rerolling a question - memoized to prevent re-creation
+  const handleRerollQuestion = useCallback(async () => {
+    try {
+      // Call reroll_question RPC function
+      const { data, error } = await supabase.rpc('reroll_question', {
+        room_code_param: gameState.roomCode,
+        player_id_param: playerId
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to reroll question');
+      }
+
+      // Database will clear current_question and asker will select a new one
+      // Realtime subscription will broadcast changes automatically
+
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.error('Failed to reroll question:', error);
+      }
+      alert(error.message || 'Failed to reroll question');
+    }
+  }, [gameState.roomCode, playerId]);
+
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {
     return (
       <div className="min-h-screen stars-bg flex items-center justify-center p-4">
@@ -181,6 +209,9 @@ function GameScreen({ gameState, playerId }) {
             question={gameState.currentQuestion}
             level={gameState.currentLevel}
             isCustomQuestion={gameState.isCustomQuestion}
+            isAnswerer={isAnswerer}
+            rerollsUsed={gameState.rerollsUsed || {}}
+            onReroll={handleRerollQuestion}
           />
         ) : (
           /* Waiting for asker to select question */
