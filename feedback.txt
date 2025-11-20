@@ -1,0 +1,6 @@
+- Fix quesiton levels (THEY ARE TOO HARD AND NOT SLOPING DECREMENTAL)
+- BIGGER SAMPLE SIZE
+- Maybe reroll if you dont like question like 1 skip at most and failure to comply is death by drone strike
+- Emoji reactions?
+- Text boxes (possibly)
+- Drinking alcohol
