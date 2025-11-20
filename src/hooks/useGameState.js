@@ -56,6 +56,21 @@ export function useGameState(roomCode, playerId) {
   
   // Ref to track if initial connection succeeded
   const hasConnectedRef = useRef(false);
+  
+  // Ref to track if timeout has fired
+  const timeoutFiredRef = useRef(false);
+
+  /**
+   * Helper to mark connection as successful and clear loading timeout
+   */
+  const markConnectionSuccessful = useCallback(() => {
+    hasConnectedRef.current = true;
+    
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+  }, []);
 
   /**
    * Fetch current game state from database
@@ -137,14 +152,8 @@ export function useGameState(roomCode, playerId) {
         rerollsUsed: gameStateData?.rerolls_used ?? {}
       });
 
-      // Mark that we've successfully connected at least once
-      hasConnectedRef.current = true;
-      
-      // Clear loading timeout since we connected successfully
-      if (loadingTimeoutRef.current) {
-        clearTimeout(loadingTimeoutRef.current);
-        loadingTimeoutRef.current = null;
-      }
+      // Mark connection as successful and clear loading timeout
+      markConnectionSuccessful();
       
       setIsConnected(true);
       setError(null);
@@ -158,7 +167,7 @@ export function useGameState(roomCode, playerId) {
         setError('Failed to load game state');
       }
     }
-  }, [roomCode]);
+  }, [roomCode, markConnectionSuccessful]);
 
   /**
    * Subscribe to Postgres Realtime changes using a single consolidated channel
@@ -171,11 +180,13 @@ export function useGameState(roomCode, playerId) {
 
     // Reset connection tracking
     hasConnectedRef.current = false;
+    timeoutFiredRef.current = false;
     
     // Set up loading timeout
     loadingTimeoutRef.current = setTimeout(() => {
       // Only show error if we haven't connected after timeout
       if (!hasConnectedRef.current) {
+        timeoutFiredRef.current = true;
         setError('Connection timeout - unable to reach room. Please check your connection and try again.');
         setIsConnected(false);
       }
@@ -301,14 +312,8 @@ export function useGameState(roomCode, playerId) {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Mark successful connection
-          hasConnectedRef.current = true;
-          
-          // Clear loading timeout since we connected
-          if (loadingTimeoutRef.current) {
-            clearTimeout(loadingTimeoutRef.current);
-            loadingTimeoutRef.current = null;
-          }
+          // Mark connection as successful and clear loading timeout
+          markConnectionSuccessful();
           
           setIsConnected(true);
           setError(null);
@@ -317,7 +322,7 @@ export function useGameState(roomCode, playerId) {
           }
         } else if (status === 'CHANNEL_ERROR') {
           // Only show error if we're past initial loading or timeout occurred
-          if (hasConnectedRef.current || !loadingTimeoutRef.current) {
+          if (hasConnectedRef.current || timeoutFiredRef.current) {
             setError('Failed to connect to real-time updates');
             setIsConnected(false);
           }
@@ -337,7 +342,7 @@ export function useGameState(roomCode, playerId) {
       channel.unsubscribe();
       setIsConnected(false);
     };
-  }, [roomCode]);
+  }, [roomCode, fetchGameState, markConnectionSuccessful]);
 
   /**
    * Send heartbeat to maintain presence
