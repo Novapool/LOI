@@ -13,6 +13,9 @@ export const GAME_CONFIG = {
   // Heartbeat interval in milliseconds (30 seconds - reduced from 10s for better performance)
   HEARTBEAT_INTERVAL: 30000,
 
+  // Connection timeout in milliseconds (10 seconds)
+  CONNECTION_TIMEOUT: 10000,
+
   // Game status constants
   STATUS: {
     LOBBY: 'lobby',

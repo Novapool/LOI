@@ -50,6 +50,12 @@ export function useGameState(roomCode, playerId) {
 
   // Ref for single consolidated channel
   const channelRef = useRef(null);
+  
+  // Ref for loading timeout
+  const loadingTimeoutRef = useRef(null);
+  
+  // Ref to track if initial connection succeeded
+  const hasConnectedRef = useRef(false);
 
   /**
    * Fetch current game state from database
@@ -66,13 +72,21 @@ export function useGameState(roomCode, playerId) {
         .single();
 
       if (roomError) {
-        if (roomError.code === 'PGRST116') {
-          setError('Room not found');
-        } else {
-          if (import.meta.env.DEV) {
-            console.error('Error fetching room:', roomError);
+        // Only set error if we're past the initial loading phase
+        if (hasConnectedRef.current) {
+          if (roomError.code === 'PGRST116') {
+            setError('Room not found');
+          } else {
+            if (import.meta.env.DEV) {
+              console.error('Error fetching room:', roomError);
+            }
+            setError('Failed to fetch room data');
           }
-          setError('Failed to fetch room data');
+        } else {
+          // During initial loading, just log the error but don't show it
+          if (import.meta.env.DEV) {
+            console.log('Waiting for room data...', roomError);
+          }
         }
         return;
       }
@@ -123,6 +137,15 @@ export function useGameState(roomCode, playerId) {
         rerollsUsed: gameStateData?.rerolls_used ?? {}
       });
 
+      // Mark that we've successfully connected at least once
+      hasConnectedRef.current = true;
+      
+      // Clear loading timeout since we connected successfully
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      
       setIsConnected(true);
       setError(null);
 
@@ -130,7 +153,10 @@ export function useGameState(roomCode, playerId) {
       if (import.meta.env.DEV) {
         console.error('Error fetching game state:', err);
       }
-      setError('Failed to load game state');
+      // Only set error if we're past the initial loading phase
+      if (hasConnectedRef.current) {
+        setError('Failed to load game state');
+      }
     }
   }, [roomCode]);
 
@@ -142,6 +168,18 @@ export function useGameState(roomCode, playerId) {
       setError('Supabase not configured or room code missing');
       return;
     }
+
+    // Reset connection tracking
+    hasConnectedRef.current = false;
+    
+    // Set up loading timeout
+    loadingTimeoutRef.current = setTimeout(() => {
+      // Only show error if we haven't connected after timeout
+      if (!hasConnectedRef.current) {
+        setError('Connection timeout - unable to reach room. Please check your connection and try again.');
+        setIsConnected(false);
+      }
+    }, GAME_CONFIG.CONNECTION_TIMEOUT);
 
     // Fetch initial state
     fetchGameState();
@@ -263,13 +301,26 @@ export function useGameState(roomCode, playerId) {
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
+          // Mark successful connection
+          hasConnectedRef.current = true;
+          
+          // Clear loading timeout since we connected
+          if (loadingTimeoutRef.current) {
+            clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
+          
           setIsConnected(true);
+          setError(null);
           if (import.meta.env.DEV) {
             console.log('Connected to Realtime');
           }
         } else if (status === 'CHANNEL_ERROR') {
-          setError('Failed to connect to real-time updates');
-          setIsConnected(false);
+          // Only show error if we're past initial loading or timeout occurred
+          if (hasConnectedRef.current || !loadingTimeoutRef.current) {
+            setError('Failed to connect to real-time updates');
+            setIsConnected(false);
+          }
         }
       });
 
@@ -277,6 +328,12 @@ export function useGameState(roomCode, playerId) {
 
     // Cleanup on unmount
     return () => {
+      // Clear loading timeout if still active
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      
       channel.unsubscribe();
       setIsConnected(false);
     };
