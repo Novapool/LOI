@@ -41,7 +41,8 @@ export function useGameState(roomCode, playerId) {
     currentAnswererIndex: 1,
     currentQuestion: null,
     questionCount: 0,
-    isCustomQuestion: false
+    isCustomQuestion: false,
+    rerollsUsed: {}
   });
 
   const [isConnected, setIsConnected] = useState(false);
@@ -118,7 +119,8 @@ export function useGameState(roomCode, playerId) {
         currentAnswererIndex: gameStateData?.current_answerer_index ?? 1,
         currentQuestion: gameStateData?.current_question ?? null,
         questionCount: gameStateData?.question_count ?? 0,
-        isCustomQuestion: gameStateData?.is_custom_question ?? false
+        isCustomQuestion: gameStateData?.is_custom_question ?? false,
+        rerollsUsed: gameStateData?.rerolls_used ?? {}
       });
 
       setIsConnected(true);
@@ -254,7 +256,8 @@ export function useGameState(roomCode, playerId) {
             currentAnswererIndex: newData.current_answerer_index,
             currentQuestion: newData.current_question,
             questionCount: newData.question_count,
-            isCustomQuestion: newData.is_custom_question
+            isCustomQuestion: newData.is_custom_question,
+            rerollsUsed: newData.rerolls_used ?? {}
           }));
         }
       )
