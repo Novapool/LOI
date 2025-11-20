@@ -178,6 +178,11 @@ export function useGameState(roomCode, playerId) {
       return;
     }
 
+    // Clear any existing timeout before setting a new one
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+    }
+    
     // Reset connection tracking
     hasConnectedRef.current = false;
     timeoutFiredRef.current = false;
