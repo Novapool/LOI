@@ -173,8 +173,13 @@ export function useGameState(roomCode, playerId) {
    * Subscribe to Postgres Realtime changes using a single consolidated channel
    */
   useEffect(() => {
-    if (!supabase || !roomCode) {
-      setError('Supabase not configured or room code missing');
+    if (!supabase) {
+      setError('Supabase not configured');
+      return;
+    }
+    
+    if (!roomCode) {
+      // No room code yet - this is the initial state, not an error
       return;
     }
 
