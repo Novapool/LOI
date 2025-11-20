@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { GAME_CONFIG } from '../config';
 
 // Initialize Supabase client
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -300,9 +301,8 @@ export function useGameState(roomCode, playerId) {
     // Send initial heartbeat (catch errors silently in production)
     updateHeartbeat();
 
-    // Use 30 second interval for better performance (reduced from 10s)
-    const heartbeatInterval = 30000;
-    const interval = setInterval(updateHeartbeat, heartbeatInterval);
+    // Use configured heartbeat interval
+    const interval = setInterval(updateHeartbeat, GAME_CONFIG.HEARTBEAT_INTERVAL);
 
     return () => {
       clearInterval(interval);

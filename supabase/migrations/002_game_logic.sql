@@ -240,8 +240,8 @@ DECLARE
   new_host RECORD;
   remaining_count INTEGER;
 BEGIN
-  -- Define threshold (30 seconds ago)
-  inactive_threshold := NOW() - INTERVAL '30 seconds';
+  -- Define threshold (120 seconds ago - 2 minutes for more forgiving timeout)
+  inactive_threshold := NOW() - INTERVAL '120 seconds';
 
   -- Find and remove inactive players in the same room
   WITH deleted_players AS (
@@ -298,7 +298,7 @@ CREATE OR REPLACE FUNCTION cleanup_inactive_players()
 RETURNS void AS $$
 BEGIN
   DELETE FROM game_players
-  WHERE last_heartbeat < NOW() - INTERVAL '30 seconds';
+  WHERE last_heartbeat < NOW() - INTERVAL '120 seconds';
 END;
 $$ LANGUAGE plpgsql;
 

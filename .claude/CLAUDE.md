@@ -28,11 +28,11 @@
 2. **Database-Backed State**
    - Rooms persist in PostgreSQL database
    - Automatic cleanup via scheduled jobs (pg_cron):
-     - Inactive players removed every 30 seconds (no heartbeat for 30s+)
+     - Inactive players removed every 30 seconds (no heartbeat for 120s+)
      - Old rooms removed every 5 minutes (created 2+ hours ago)
      - Empty rooms removed every 5 minutes (0 players)
    - Room codes generated and validated server-side
-   - Player presence tracked via heartbeat mechanism (every 10 seconds)
+   - Player presence tracked via heartbeat mechanism (every 30 seconds)
 
 3. **Postgres Realtime Sync**
    - Uses Supabase Postgres Realtime (CDC subscriptions)
@@ -321,7 +321,7 @@ Returns: { success: boolean, gameState: {...}, error?: string }
 
 **cleanup_inactive_players_trigger:**
 - Fires when a player updates their heartbeat
-- Removes players with no heartbeat for 30+ seconds in the same room
+- Removes players with no heartbeat for 120+ seconds in the same room
 - Transfers host to oldest player if host is removed
 - Deletes room if all players are removed
 
@@ -331,7 +331,7 @@ The system uses PostgreSQL scheduled jobs to automatically clean up stale data:
 
 **cleanup-inactive-players:**
 - **Schedule:** Every 30 seconds
-- **Action:** Deletes players with `last_heartbeat` older than 30 seconds
+- **Action:** Deletes players with `last_heartbeat` older than 120 seconds
 - **Why:** Handles case where all players close browsers (no heartbeat trigger)
 
 **cleanup-old-rooms:**
