@@ -9,15 +9,17 @@ import { GAME_CONFIG } from '../config';
  * @param {number} props.level - The current level (1-5)
  * @param {boolean} props.isCustomQuestion - Whether this is a custom question
  * @param {boolean} props.isAnswerer - Whether current player is the answerer
- * @param {Object} props.rerollsUsed - Object tracking reroll usage per level
+ * @param {Object} props.rerollsUsed - Object tracking reroll usage per level (structure: { "level": [playerId1, playerId2] })
+ * @param {string} props.playerId - Current player's ID
  * @param {function} props.onReroll - Callback when reroll button is clicked
  */
-function QuestionCard({ question, level, isCustomQuestion = false, isAnswerer = false, rerollsUsed = {}, onReroll }) {
+function QuestionCard({ question, level, isCustomQuestion = false, isAnswerer = false, rerollsUsed = {}, playerId, onReroll }) {
   const levelColor = GAME_CONFIG.LEVEL_COLORS[level];
   const levelName = GAME_CONFIG.LEVEL_NAMES[level];
-  
-  // Check if reroll has been used for current level
-  const hasUsedReroll = rerollsUsed[level.toString()] !== undefined;
+
+  // Check if this player has used their reroll for current level
+  const levelKey = level.toString();
+  const hasUsedReroll = rerollsUsed[levelKey] && Array.isArray(rerollsUsed[levelKey]) && rerollsUsed[levelKey].includes(playerId);
 
   return (
     <div className="w-full max-w-2xl mx-auto">

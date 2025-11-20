@@ -3,6 +3,7 @@ import QuestionCard from './QuestionCard';
 import QuestionSelector from './QuestionSelector';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
+import { getRandomQuestion } from '../data/questions';
 
 /**
  * GameScreen component - Active game UI with asker/answerer pattern
@@ -93,7 +94,7 @@ function GameScreen({ gameState, playerId }) {
   // Handle answerer rerolling a question - memoized to prevent re-creation
   const handleRerollQuestion = useCallback(async () => {
     try {
-      // Call reroll_question RPC function
+      // Call reroll_question RPC function to mark reroll as used
       const { data, error } = await supabase.rpc('reroll_question', {
         room_code_param: gameState.roomCode,
         player_id_param: playerId
@@ -107,8 +108,26 @@ function GameScreen({ gameState, playerId }) {
         throw new Error(data?.error || 'Failed to reroll question');
       }
 
-      // Database will clear current_question and asker will select a new one
-      // Realtime subscription will broadcast changes automatically
+      // Generate new random question from local bank
+      const newQuestion = getRandomQuestion(gameState.currentLevel, memoizedAskedQuestions);
+
+      // Set the new question using existing set_question RPC
+      const { data: setData, error: setError } = await supabase.rpc('set_question', {
+        room_code_param: gameState.roomCode,
+        player_id_param: askerPlayerId, // Asker sets the question (on behalf of answerer's reroll)
+        question_text: newQuestion,
+        is_custom_param: false
+      });
+
+      if (setError) {
+        throw setError;
+      }
+
+      if (!setData?.success) {
+        throw new Error(setData?.error || 'Failed to set new question');
+      }
+
+      // Realtime subscription will broadcast the question update automatically
 
     } catch (error) {
       if (import.meta.env.DEV) {
@@ -116,7 +135,7 @@ function GameScreen({ gameState, playerId }) {
       }
       alert(error.message || 'Failed to reroll question');
     }
-  }, [gameState.roomCode, playerId]);
+  }, [gameState.roomCode, playerId, gameState.currentLevel, memoizedAskedQuestions, askerPlayerId]);
 
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {
     return (
@@ -211,6 +230,7 @@ function GameScreen({ gameState, playerId }) {
             isCustomQuestion={gameState.isCustomQuestion}
             isAnswerer={isAnswerer}
             rerollsUsed={gameState.rerollsUsed || {}}
+            playerId={playerId}
             onReroll={handleRerollQuestion}
           />
         ) : (

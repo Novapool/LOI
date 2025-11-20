@@ -10,7 +10,7 @@
 -- ============================================================================
 
 -- Add rerolls_used tracking to game_state
--- Structure: { "level": playerId, ... } to track which player used reroll at each level
+-- Structure: { "level": [playerId1, playerId2, ...], ... } to track which players used reroll at each level
 ALTER TABLE game_state
   ADD COLUMN IF NOT EXISTS rerolls_used JSONB NOT NULL DEFAULT '{}'::jsonb;
 
@@ -28,7 +28,6 @@ DECLARE
   answerer_player_id TEXT;
   current_level_key TEXT;
   has_used_reroll BOOLEAN;
-  random_question TEXT;
 BEGIN
   -- Get current game state
   SELECT * INTO current_state FROM game_state WHERE room_code = room_code_param;
@@ -50,39 +49,27 @@ BEGIN
     RETURN jsonb_build_object('success', FALSE, 'error', 'No question to reroll');
   END IF;
 
-  -- Check if reroll has already been used for this level
+  -- Check if this player has already used reroll for this level
   current_level_key := current_state.current_level::TEXT;
-  has_used_reroll := (current_state.rerolls_used ? current_level_key);
+  -- Check if player_id is in the array for this level
+  has_used_reroll := (
+    current_state.rerolls_used ? current_level_key AND
+    current_state.rerolls_used->current_level_key @> to_jsonb(player_id_param)
+  );
 
   IF has_used_reroll THEN
-    RETURN jsonb_build_object('success', FALSE, 'error', 'Reroll already used for this level');
+    RETURN jsonb_build_object('success', FALSE, 'error', 'You have already used your reroll for this level');
   END IF;
 
-  -- Fetch a random question from the question bank for the current level
-  -- Part of the gamble: can select already-asked questions
-  SELECT question_text INTO random_question
-  FROM question_bank
-  WHERE level = current_state.current_level
-    AND is_active = true
-  ORDER BY random()
-  LIMIT 1;
-
-  -- Verify we found a question
-  IF random_question IS NULL THEN
-    RETURN jsonb_build_object('success', FALSE, 'error', 'No questions available for this level');
-  END IF;
-
-  -- Mark reroll as used for this level AND set the new random question
+  -- Mark reroll as used for this level (append player to array)
   UPDATE game_state
   SET
     rerolls_used = jsonb_set(
       rerolls_used,
       ARRAY[current_level_key],
-      to_jsonb(player_id_param),
+      COALESCE(rerolls_used->current_level_key, '[]'::jsonb) || to_jsonb(player_id_param),
       true
     ),
-    current_question = random_question, -- Set random question from bank (auto-selected)
-    is_custom_question = false, -- Always false for bank questions
     updated_at = NOW()
   WHERE room_code = room_code_param;
 
@@ -90,15 +77,13 @@ BEGIN
   INSERT INTO game_events (room_code, event, payload)
   VALUES (room_code_param, 'question_rerolled', jsonb_build_object(
     'answererPlayerId', player_id_param,
-    'level', current_state.current_level,
-    'newQuestion', random_question
+    'level', current_state.current_level
   ));
 
-  -- Return success with the new question
+  -- Return success (frontend will select new question from local bank)
   RETURN jsonb_build_object(
     'success', TRUE,
-    'message', 'Question rerolled successfully',
-    'question', random_question
+    'message', 'Reroll available - select new question'
   );
 EXCEPTION
   WHEN OTHERS THEN

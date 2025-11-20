@@ -8,6 +8,8 @@
 
 ---
 
+- When working with supabase remember you have access to the supabase mcp server and it should be used when making changes to the database or when more information is needed about the current implementation
+
 ## Architecture
 
 ### Stack Summary
