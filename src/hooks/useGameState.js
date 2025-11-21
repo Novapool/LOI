@@ -74,17 +74,28 @@ export function useGameState(roomCode, playerId) {
 
   /**
    * Fetch current game state from database
+   * Optimized to batch queries using Promise.all for parallel execution
    */
   const fetchGameState = useCallback(async () => {
     if (!supabase || !roomCode) return;
 
     try {
-      // Fetch room info (roomCode is already uppercase)
-      const { data: room, error: roomError } = await supabase
-        .from('game_rooms')
-        .select('*')
-        .eq('room_code', roomCode)
-        .single();
+      // Batch all queries in parallel for better performance
+      const [roomResult, playersResult] = await Promise.all([
+        supabase
+          .from('game_rooms')
+          .select('*')
+          .eq('room_code', roomCode)
+          .single(),
+        supabase
+          .from('game_players')
+          .select('*')
+          .eq('room_code', roomCode)
+          .order('joined_at', { ascending: true })
+      ]);
+
+      const { data: room, error: roomError } = roomResult;
+      const { data: players, error: playersError } = playersResult;
 
       if (roomError) {
         // Only set error if we're past the initial loading phase
@@ -106,18 +117,11 @@ export function useGameState(roomCode, playerId) {
         return;
       }
 
-      // Fetch players
-      const { data: players, error: playersError } = await supabase
-        .from('game_players')
-        .select('*')
-        .eq('room_code', roomCode)
-        .order('joined_at', { ascending: true });
-
       if (playersError && import.meta.env.DEV) {
         console.error('Error fetching players:', playersError);
       }
 
-      // Fetch game state (if game is playing)
+      // Fetch game state conditionally (if game is playing)
       let gameStateData = null;
       if (room.status === 'playing' || room.status === 'finished') {
         const { data, error: stateError } = await supabase
@@ -244,26 +248,17 @@ export function useGameState(roomCode, playerId) {
           table: 'game_players',
           filter: `room_code=eq.${roomCode}`
         },
-        async (payload) => {
+        (payload) => {
           if (import.meta.env.DEV) {
             console.log('Players updated:', payload);
           }
           
-          // For DELETE events, refetch to get current player list
-          if (payload.eventType === 'DELETE') {
-            const { data: players } = await supabase
-              .from('game_players')
-              .select('*')
-              .eq('room_code', roomCode)
-              .order('joined_at', { ascending: true });
-
+          // Optimize DELETE events - remove player directly from state instead of refetching
+          if (payload.eventType === 'DELETE' && payload.old) {
+            const deletedPlayerId = payload.old.player_id;
             setGameState(prev => ({
               ...prev,
-              players: (players || []).map(p => ({
-                id: p.player_id,
-                name: p.player_name,
-                isHost: p.is_host
-              }))
+              players: prev.players.filter(p => p.id !== deletedPlayerId)
             }));
             return;
           }

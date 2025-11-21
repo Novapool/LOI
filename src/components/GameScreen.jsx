@@ -19,11 +19,17 @@ function GameScreen({ gameState, playerId }) {
   const askerPlayerId = playerOrder[gameState.currentAskerIndex];
   const answererPlayerId = playerOrder[gameState.currentAnswererIndex];
 
-  const askerPlayer = gameState.players.find(p => p.id === askerPlayerId);
-  const answererPlayer = gameState.players.find(p => p.id === answererPlayerId);
-
-  const isAsker = askerPlayerId === playerId;
-  const isAnswerer = answererPlayerId === playerId;
+  // Memoize player lookups to avoid repeated array searches
+  const { askerPlayer, answererPlayer, isAsker, isAnswerer } = useMemo(() => {
+    const asker = gameState.players.find(p => p.id === askerPlayerId);
+    const answerer = gameState.players.find(p => p.id === answererPlayerId);
+    return {
+      askerPlayer: asker,
+      answererPlayer: answerer,
+      isAsker: askerPlayerId === playerId,
+      isAnswerer: answererPlayerId === playerId
+    };
+  }, [gameState.players, askerPlayerId, answererPlayerId, playerId]);
 
   // Memoize askedQuestions to prevent unnecessary re-renders from heartbeat updates
   // Only re-memoize when the actual array reference changes

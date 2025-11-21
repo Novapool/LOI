@@ -29,7 +29,7 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
       setSelectedQuestion(null);
       setSelectionMode(null);
     }
-  }, [level, askedQuestions]);
+  }, [level, askedQuestions, selectionMode]);
 
   // Generate initial question options
   useEffect(() => {
