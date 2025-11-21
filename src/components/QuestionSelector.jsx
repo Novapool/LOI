@@ -20,21 +20,21 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
   const levelColor = GAME_CONFIG.LEVEL_COLORS[level];
   const levelName = GAME_CONFIG.LEVEL_NAMES[level];
 
-  // Generate new random question options - memoized to prevent unnecessary recreations
-  const refreshQuestions = useCallback(() => {
+  // Generate initial question options on mount and when level/askedQuestions change
+  useEffect(() => {
     const newOptions = getRandomQuestions(level, 5, askedQuestions || []);
     setQuestionOptions(newOptions);
-    // Reset selection if refreshing
-    if (selectionMode === 'bank') {
-      setSelectedQuestion(null);
-      setSelectionMode(null);
-    }
   }, [level, askedQuestions]);
 
-  // Generate initial question options
-  useEffect(() => {
-    refreshQuestions();
-  }, [refreshQuestions]);
+  // Handle refreshing questions (separate from selection logic)
+  const handleRefreshQuestions = () => {
+    const newOptions = getRandomQuestions(level, 5, askedQuestions || []);
+    setQuestionOptions(newOptions);
+    // Reset selection when explicitly refreshing
+    setSelectedQuestion(null);
+    setSelectionMode(null);
+    setCustomQuestion('');
+  };
 
   // Handle selecting a question from the bank
   const handleSelectBankQuestion = (question) => {
@@ -89,7 +89,7 @@ function QuestionSelector({ level, askedQuestions, targetPlayerName, onQuestionS
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-2xl font-pixel text-gray-800">CHOOSE A QUESTION:</h3>
           <button
-            onClick={refreshQuestions}
+            onClick={handleRefreshQuestions}
             className="font-pixel text-lg text-warmAccent hover:text-orange-700 flex items-center gap-2 border-2 border-warmAccent px-3 py-1 rounded hover:bg-warmAccent hover:text-white active:translate-y-1"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
