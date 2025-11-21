@@ -1,6 +1,7 @@
 import { useMemo, memo, useCallback } from 'react';
 import QuestionCard from './QuestionCard';
 import QuestionSelector from './QuestionSelector';
+import PlayerBadge from './PlayerBadge';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
 import { getRandomQuestion } from '../data/questions';
@@ -19,11 +20,17 @@ function GameScreen({ gameState, playerId }) {
   const askerPlayerId = playerOrder[gameState.currentAskerIndex];
   const answererPlayerId = playerOrder[gameState.currentAnswererIndex];
 
-  const askerPlayer = gameState.players.find(p => p.id === askerPlayerId);
-  const answererPlayer = gameState.players.find(p => p.id === answererPlayerId);
-
-  const isAsker = askerPlayerId === playerId;
-  const isAnswerer = answererPlayerId === playerId;
+  // Memoize player lookups to avoid repeated array searches
+  const { askerPlayer, answererPlayer, isAsker, isAnswerer } = useMemo(() => {
+    const asker = gameState.players.find(p => p.id === askerPlayerId);
+    const answerer = gameState.players.find(p => p.id === answererPlayerId);
+    return {
+      askerPlayer: asker,
+      answererPlayer: answerer,
+      isAsker: askerPlayerId === playerId,
+      isAnswerer: answererPlayerId === playerId
+    };
+  }, [gameState.players, askerPlayerId, answererPlayerId, playerId]);
 
   // Memoize askedQuestions to prevent unnecessary re-renders from heartbeat updates
   // Only re-memoize when the actual array reference changes
@@ -253,27 +260,14 @@ function GameScreen({ gameState, playerId }) {
         <div className="bg-amber-50 border-4 border-woodBrown rounded-lg p-6">
           <h3 className="text-gray-800 text-2xl font-pixel mb-4">PLAYERS</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {gameState.players.map((player) => {
-              const isCurrentAsker = player.id === askerPlayerId;
-              const isCurrentAnswerer = player.id === answererPlayerId;
-
-              return (
-                <div
-                  key={player.id}
-                  className={`rounded-lg p-3 text-center font-pixel border-4 ${
-                    isCurrentAsker
-                      ? 'bg-level4 text-white font-bold border-red-900'
-                      : isCurrentAnswerer
-                      ? 'bg-level2 text-gray-900 font-bold border-yellow-600'
-                      : 'bg-amber-100 text-gray-700 border-amber-300'
-                  }`}
-                >
-                  <div className="text-lg">{player.name}</div>
-                  {isCurrentAsker && <div className="text-sm mt-1">ASKING</div>}
-                  {isCurrentAnswerer && <div className="text-sm mt-1">ANSWERING</div>}
-                </div>
-              );
-            })}
+            {gameState.players.map((player) => (
+              <PlayerBadge
+                key={player.id}
+                player={player}
+                isCurrentAsker={player.id === askerPlayerId}
+                isCurrentAnswerer={player.id === answererPlayerId}
+              />
+            ))}
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, memo, useCallback } from 'react';
 import { GAME_CONFIG } from '../config';
 import { supabase } from '../hooks/useGameState';
 import CampfireAnimation from './CampfireAnimation';
+import LobbyPlayerCard from './LobbyPlayerCard';
 
 /**
  * Lobby component - Pre-game room with player list
@@ -127,17 +128,11 @@ function Lobby({ gameState, playerId }) {
             </h2>
             <div className="space-y-2">
               {gameState.players.map((player) => (
-                <div
+                <LobbyPlayerCard
                   key={player.id}
-                  className="bg-amber-100 border-2 border-amber-300 rounded-lg p-3 flex items-center justify-between"
-                >
-                  <span className="font-pixel text-xl text-gray-800">{player.name}</span>
-                  {player.id === gameState.hostId && (
-                    <span className="font-pixel text-sm bg-warmAccent text-white px-3 py-1 rounded border-2 border-woodBrown">
-                      HOST
-                    </span>
-                  )}
-                </div>
+                  player={player}
+                  isHost={player.id === gameState.hostId}
+                />
               ))}
             </div>
 

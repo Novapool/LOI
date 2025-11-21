@@ -353,7 +353,14 @@ export const QUESTIONS = {
  */
 export function getRandomQuestion(level, exclude = []) {
   const questions = QUESTIONS[level] || QUESTIONS[1];
-  const available = questions.filter(q => !exclude.includes(q));
+  
+  // Optimize: Convert exclude to Set for O(1) lookups instead of O(n)
+  if (exclude.length === 0) {
+    return questions[Math.floor(Math.random() * questions.length)];
+  }
+  
+  const excludeSet = new Set(exclude);
+  const available = questions.filter(q => !excludeSet.has(q));
 
   if (available.length === 0) {
     // If all questions have been used, reset and use any question
@@ -373,16 +380,51 @@ export function getRandomQuestion(level, exclude = []) {
  */
 export function getRandomQuestions(level, count = 5, exclude = []) {
   const questions = QUESTIONS[level] || QUESTIONS[1];
-  const available = questions.filter(q => !exclude.includes(q));
+  
+  // Early exit optimization - if no exclusions and requesting more than available, return all
+  if (exclude.length === 0 && count >= questions.length) {
+    return [...questions];
+  }
+  
+  // Convert exclude to Set for O(1) lookups instead of O(n) with includes()
+  const excludeSet = new Set(exclude);
+  const available = questions.filter(q => !excludeSet.has(q));
 
   // If not enough available questions, use all questions
   const pool = available.length >= count ? available : questions;
 
-  // Use Fisher-Yates shuffle algorithm for proper randomization
+  // Optimize: If requesting all or more than available, just return pool (optionally shuffled)
+  if (count >= pool.length) {
+    // Use Fisher-Yates shuffle algorithm for proper randomization
+    const shuffled = [...pool];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  // Optimize: For small counts, select random elements without full shuffle
+  // Use threshold of pool.length / 10 to avoid potential performance issues
+  // when count approaches pool.length / 4 (per code review)
+  if (count <= Math.max(5, pool.length / 10)) {
+    const selected = new Set();
+    const result = [];
+    while (result.length < count) {
+      const idx = Math.floor(Math.random() * pool.length);
+      if (!selected.has(idx)) {
+        selected.add(idx);
+        result.push(pool[idx]);
+      }
+    }
+    return result;
+  }
+
+  // For medium to large counts, use partial Fisher-Yates shuffle
   const shuffled = [...pool];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+  for (let i = 0; i < count; i++) {
+    const j = i + Math.floor(Math.random() * (shuffled.length - i));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
-  return shuffled.slice(0, Math.min(count, shuffled.length));
+  return shuffled.slice(0, count);
 }
