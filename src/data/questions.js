@@ -388,7 +388,7 @@ export function getRandomQuestions(level, count = 5, exclude = []) {
   
   // Convert exclude to Set for O(1) lookups instead of O(n) with includes()
   const excludeSet = new Set(exclude);
-  const available = excludeSet.size > 0 ? questions.filter(q => !excludeSet.has(q)) : questions;
+  const available = questions.filter(q => !excludeSet.has(q));
 
   // If not enough available questions, use all questions
   const pool = available.length >= count ? available : questions;
@@ -404,8 +404,10 @@ export function getRandomQuestions(level, count = 5, exclude = []) {
     return shuffled;
   }
 
-  // Optimize: For small counts relative to pool size, select random elements without full shuffle
-  if (count <= pool.length / 4) {
+  // Optimize: For small counts, select random elements without full shuffle
+  // Use threshold of pool.length / 10 to avoid potential performance issues
+  // when count approaches pool.length / 4 (per code review)
+  if (count <= Math.max(5, pool.length / 10)) {
     const selected = new Set();
     const result = [];
     while (result.length < count) {
@@ -418,7 +420,7 @@ export function getRandomQuestions(level, count = 5, exclude = []) {
     return result;
   }
 
-  // For medium counts, use partial Fisher-Yates shuffle
+  // For medium to large counts, use partial Fisher-Yates shuffle
   const shuffled = [...pool];
   for (let i = 0; i < count; i++) {
     const j = i + Math.floor(Math.random() * (shuffled.length - i));
