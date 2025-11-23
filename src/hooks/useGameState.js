@@ -42,7 +42,9 @@ export function useGameState(roomCode, playerId) {
     currentQuestion: null,
     questionCount: 0,
     isCustomQuestion: false,
-    rerollsUsed: {}
+    rerollsUsed: {},
+    turnStartedAt: null,
+    turnTimeoutSeconds: 60
   });
 
   const [isConnected, setIsConnected] = useState(false);
@@ -144,7 +146,9 @@ export function useGameState(roomCode, playerId) {
         players: (players || []).map(p => ({
           id: p.player_id,
           name: p.player_name,
-          isHost: p.is_host
+          isHost: p.is_host,
+          isDisconnected: p.is_disconnected || false,
+          disconnectedAt: p.disconnected_at || null
         })),
         currentLevel: gameStateData?.current_level ?? 5,
         playerOrder: gameStateData?.player_order ?? [],
@@ -153,7 +157,9 @@ export function useGameState(roomCode, playerId) {
         currentQuestion: gameStateData?.current_question ?? null,
         questionCount: gameStateData?.question_count ?? 0,
         isCustomQuestion: gameStateData?.is_custom_question ?? false,
-        rerollsUsed: gameStateData?.rerolls_used ?? {}
+        rerollsUsed: gameStateData?.rerolls_used ?? {},
+        turnStartedAt: gameStateData?.turn_started_at ?? null,
+        turnTimeoutSeconds: gameStateData?.turn_timeout_seconds ?? 60
       });
 
       // Mark connection as successful and clear loading timeout

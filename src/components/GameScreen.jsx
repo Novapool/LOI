@@ -1,4 +1,4 @@
-import { useMemo, memo, useCallback } from 'react';
+import { useMemo, memo, useCallback, useEffect, useState } from 'react';
 import QuestionCard from './QuestionCard';
 import QuestionSelector from './QuestionSelector';
 import PlayerBadge from './PlayerBadge';
@@ -14,6 +14,8 @@ import { getRandomQuestion } from '../data/questions';
  * @param {string} props.playerId - Current player's ID
  */
 function GameScreen({ gameState, playerId }) {
+  // State for turn timeout tracking
+  const [turnSkipMessage, setTurnSkipMessage] = useState(null);
 
   // Get asker and answerer from circular player order
   const playerOrder = gameState.playerOrder || [];
@@ -144,6 +146,47 @@ function GameScreen({ gameState, playerId }) {
     }
   }, [gameState.roomCode, playerId, gameState.currentLevel, memoizedAskedQuestions, askerPlayerId]);
 
+  // Turn timeout monitoring - checks if disconnected player's turn should be skipped
+  useEffect(() => {
+    // Only monitor during active gameplay
+    if (gameState.status !== GAME_CONFIG.STATUS.PLAYING) return;
+
+    // Only check if asker is disconnected
+    if (!askerPlayer?.isDisconnected) {
+      setTurnSkipMessage(null);
+      return;
+    }
+
+    // Check turn timeout every 10 seconds
+    const intervalId = setInterval(async () => {
+      try {
+        const { data, error } = await supabase.rpc('check_turn_timeout', {
+          room_code_param: gameState.roomCode
+        });
+
+        if (error) {
+          if (import.meta.env.DEV) {
+            console.error('Turn timeout check failed:', error);
+          }
+          return;
+        }
+
+        if (data?.skipped) {
+          // Turn was auto-skipped
+          setTurnSkipMessage(`${data.skippedPlayerName} was skipped (disconnected)`);
+          // Clear message after 5 seconds
+          setTimeout(() => setTurnSkipMessage(null), 5000);
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error('Turn timeout error:', err);
+        }
+      }
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(intervalId);
+  }, [gameState.status, gameState.roomCode, askerPlayer?.isDisconnected]);
+
   if (gameState.status === GAME_CONFIG.STATUS.FINISHED) {
     return (
       <div className="min-h-screen stars-bg flex items-center justify-center p-4">
@@ -190,6 +233,15 @@ function GameScreen({ gameState, playerId }) {
           </div>
         </div>
       </div>
+
+      {/* Turn Skip Message */}
+      {turnSkipMessage && (
+        <div className="max-w-4xl mx-auto mb-8">
+          <div className="bg-orange-100 border-4 border-orange-400 rounded-lg p-4 text-center animate-pulse">
+            <p className="text-xl font-pixel text-orange-800">{turnSkipMessage}</p>
+          </div>
+        </div>
+      )}
 
       {/* Asker/Answerer Indicator */}
       <div className="max-w-4xl mx-auto mb-8">

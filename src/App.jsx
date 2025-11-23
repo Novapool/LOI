@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import Lobby from './components/Lobby';
 import GameScreen from './components/GameScreen';
+import ReconnectPrompt from './components/ReconnectPrompt';
 import CampfireAnimation from './components/CampfireAnimation';
 import { useGameState, supabase } from './hooks/useGameState';
 import { GAME_CONFIG } from './config';
+import { saveSession, loadSession, clearSession } from './utils/sessionManager';
 
 /**
  * Main App component - Handles routing and game state management
@@ -11,19 +13,82 @@ import { GAME_CONFIG } from './config';
 function App() {
   const [roomCode, setRoomCode] = useState('');
   const [playerId, setPlayerId] = useState('');
+  const [sessionToken, setSessionToken] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [creatorName, setCreatorName] = useState('');
+  const [showReconnectPrompt, setShowReconnectPrompt] = useState(false);
+  const [pendingSession, setPendingSession] = useState(null);
 
-  // Initialize player ID on mount using crypto.randomUUID()
+  // Initialize player ID and check for existing session on mount
   useEffect(() => {
-    const id = crypto.randomUUID();
-    setPlayerId(id);
+    // Check for existing session
+    const existingSession = loadSession();
+
+    if (existingSession) {
+      // Show reconnect prompt
+      setPendingSession(existingSession);
+      setShowReconnectPrompt(true);
+      setPlayerId(existingSession.playerId);
+      setSessionToken(existingSession.sessionToken);
+    } else {
+      // Generate new player ID
+      const id = crypto.randomUUID();
+      setPlayerId(id);
+    }
   }, []);
 
   // Use Postgres Realtime hook
   const { gameState, isConnected, error } = useGameState(roomCode, playerId);
+
+  // Handle reconnection attempt
+  const handleReconnect = useCallback(async () => {
+    if (!pendingSession) return { success: false };
+
+    try {
+      const { data, error } = await supabase.rpc('reconnect_player', {
+        room_code_param: pendingSession.roomCode,
+        player_id_param: pendingSession.playerId,
+        session_token_param: pendingSession.sessionToken
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Reconnection successful - restore room
+        setRoomCode(pendingSession.roomCode);
+        setShowReconnectPrompt(false);
+        setPendingSession(null);
+        return { success: true };
+      } else {
+        // Session expired or invalid
+        clearSession();
+        return {
+          success: false,
+          message: data?.message || 'Session expired. Please rejoin the room.'
+        };
+      }
+    } catch (error) {
+      console.error('Reconnection failed:', error);
+      clearSession();
+      return {
+        success: false,
+        message: error.message || 'Failed to reconnect'
+      };
+    }
+  }, [pendingSession]);
+
+  // Handle "start fresh" from reconnect prompt
+  const handleStartFresh = useCallback(() => {
+    clearSession();
+    setShowReconnectPrompt(false);
+    setPendingSession(null);
+    // Generate new player ID
+    const newId = crypto.randomUUID();
+    setPlayerId(newId);
+    setSessionToken('');
+  }, []);
 
   const handleCreateRoom = useCallback(async (e) => {
     e.preventDefault();
@@ -47,6 +112,17 @@ function App() {
       if (data?.success) {
         // Room code is already uppercase from database
         setRoomCode(data.room.roomCode);
+
+        // Save session with token for reconnection
+        const sessionData = {
+          playerId: data.player.id,
+          sessionToken: data.player.sessionToken,
+          roomCode: data.room.roomCode,
+          playerName: data.player.name,
+          joinedAt: new Date().toISOString()
+        };
+        saveSession(sessionData);
+        setSessionToken(data.player.sessionToken);
       } else {
         throw new Error(data?.error || 'Failed to create room');
       }
@@ -75,6 +151,17 @@ function App() {
   const handleBackFromCreate = useCallback(() => setIsCreating(false), []);
   const handleBackFromJoin = useCallback(() => setIsJoining(false), []);
   const handleRetry = useCallback(() => window.location.reload(), []);
+
+  // Show reconnect prompt if previous session exists
+  if (showReconnectPrompt && pendingSession) {
+    return (
+      <ReconnectPrompt
+        sessionData={pendingSession}
+        onReconnect={handleReconnect}
+        onStartFresh={handleStartFresh}
+      />
+    );
+  }
 
   // Landing page - Create or Join room
   if (!roomCode) {
