@@ -113,7 +113,7 @@ function Lobby({ gameState, playerId }) {
 
         {/* Room Code Display */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-pixel font-bold text-gray-800 mb-4 tracking-wide">INTIMACY LADDER</h1>
+          <h1 className="text-4xl font-pixel font-bold text-gray-800 mb-4 tracking-wide">SURFACE LEVEL</h1>
           <div className="bg-amber-100 border-4 border-amber-300 rounded-lg p-4">
             <p className="text-lg font-pixel text-gray-700 mb-1">ROOM CODE</p>
             <p className="text-6xl font-pixel text-warmAccent tracking-wider">{gameState.roomCode}</p>

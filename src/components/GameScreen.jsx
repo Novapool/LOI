@@ -193,7 +193,7 @@ function GameScreen({ gameState, playerId }) {
         <div className="max-w-md w-full bg-amber-50 border-4 border-woodBrown rounded-lg p-8 text-center">
           <h1 className="text-5xl font-pixel font-bold text-gray-800 mb-6">GAME OVER!</h1>
           <p className="text-xl font-pixel text-gray-700 mb-8 leading-relaxed">
-            YOU'VE COMPLETED THE INTIMACY LADDER JOURNEY FROM DEEP VULNERABILITY TO CASUAL CONVERSATION.
+            YOU'VE COMPLETED THE SURFACE LEVEL JOURNEY FROM DEEP VULNERABILITY TO CASUAL CONVERSATION.
           </p>
           <p className="text-2xl font-pixel text-gray-800 mb-4">
             THANKS FOR PLAYING WITH:

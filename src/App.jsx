@@ -173,7 +173,7 @@ function App() {
             <CampfireAnimation />
           </div>
 
-          <h1 className="text-5xl font-pixel font-bold text-gray-800 mb-3 text-center tracking-wide">INTIMACY LADDER</h1>
+          <h1 className="text-5xl font-pixel font-bold text-gray-800 mb-3 text-center tracking-wide">SURFACE LEVEL</h1>
           <p className="text-xl font-pixel text-gray-700 text-center mb-8">
             A party game that flips conversation on its head
           </p>
@@ -257,7 +257,7 @@ function App() {
 
           {/* Info */}
           <div className="mt-8 bg-amber-100 border-4 border-amber-300 rounded-lg p-4 font-pixel text-gray-800">
-            <p className="text-xl mb-2">WHAT IS INTIMACY LADDER?</p>
+            <p className="text-xl mb-2">WHAT IS SURFACE LEVEL?</p>
             <p className="text-lg leading-relaxed">
               A multiplayer game where you start with deep, vulnerable questions and work your way down
               to small talk. Perfect for parties, dates, or getting to know people on a deeper level.
