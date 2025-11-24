@@ -251,7 +251,7 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ## 🎨 Project Structure
 
 ```
-surface-level/
+LOI/
 ├── src/
 │   ├── components/
 │   │   ├── CampfireAnimation.jsx # Animated campfire decoration
@@ -337,7 +337,7 @@ export const questions = {
 Modify `src/config.js`:
 ```javascript
 export const GAME_CONFIG = {
-  QUESTIONS_PER_LEVEL: 3,   // Default, but overridden by player count
+  QUESTIONS_PER_LEVEL: 3,   // Fallback value; game uses player count instead
   MIN_PLAYERS: 2,
   MAX_PLAYERS: 10,
   HEARTBEAT_INTERVAL: 30000,
